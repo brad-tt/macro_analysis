@@ -1,0 +1,18 @@
+INDICATORS_MANIFEST = [
+    {"id": "DGS10",  "name": "10年期美债收益率",     "source": "FRED",     "priority": "P0", "unit": "percent",         "valid_range": [0, 15],       "ticker": None},
+    {"id": "DGS2",   "name": "2年期美债收益率",     "source": "FRED",     "priority": "P0", "unit": "percent",         "valid_range": [0, 15],       "ticker": None},
+    {"id": "DGS3MO", "name": "3个月美债收益率",     "source": "FRED",     "priority": "P0", "unit": "percent",         "valid_range": [0, 15],       "ticker": None},
+    {"id": "DFII10", "name": "10年期TIPS实际利率",  "source": "FRED",     "priority": "P0", "unit": "percent",         "valid_range": [-5, 10],      "ticker": None},
+    {"id": "T10YIE", "name": "10年期盈亏平衡通胀预期","source":"FRED",    "priority": "P0", "unit": "percent",         "valid_range": [0, 8],        "ticker": None},
+    {"id": "VIXCLS", "name": "VIX恐慌指数",         "source": "FRED",     "priority": "P0", "unit": "index",           "valid_range": [5, 100],      "ticker": None},
+    {"id": "DCOILWTICO","name":"WTI原油现货价",     "source": "FRED",     "priority": "P0", "unit": "usd_per_barrel",  "valid_range": [10, 200],     "ticker": None},
+    {"id": "GOLD",    "name":"伦敦金现货（黄金期货）","source":"yfinance",  "priority": "P0", "unit": "usd_per_troy_oz",  "valid_range": [400, 6000],  "ticker": "GC=F"},
+    {"id": "DTWEXBGS","name":"美元指数（广义）",    "source": "FRED",     "priority": "P0", "unit": "index",           "valid_range": [70, 130],     "ticker": None},
+    {"id": "BAMLC0A0CM","name":"IG投资级信用利差",  "source": "FRED",     "priority": "P1", "unit": "percent",         "valid_range": [0, 10],       "ticker": None},
+    {"id": "BAMLH0A0HYM2","name":"HY高收益信用利差","source":"FRED",    "priority": "P1", "unit": "percent",         "valid_range": [0, 30],       "ticker": None},
+    {"id": "CPIAUCSL","name":"CPI指数值（月度）",  "source": "FRED",     "priority": "P1", "unit": "index",           "valid_range": [200, 400],    "ticker": None,"frequency":"monthly"},
+    {"id": "BRENT",   "name": "Brent原油期货",      "source": "yfinance", "priority": "P1", "unit": "usd_per_barrel",  "valid_range": [10, 200],     "ticker": "BZ=F"},
+    {"id": "EURUSD",  "name": "欧元兑美元",          "source": "yfinance", "priority": "P1", "unit": "exchange_rate",  "valid_range": [0.8, 1.6],    "ticker": "EURUSD=X"},
+    {"id": "SPX",     "name": "标普500指数",         "source": "yfinance", "priority": "P1", "unit": "index",          "valid_range": [500, 10000],  "ticker": "^GSPC"},
+    {"id": "USDJPY",  "name": "美元兑日元",          "source": "yfinance", "priority": "P1", "unit": "exchange_rate",  "valid_range": [80, 200],     "ticker": "JPY=X"},
+]

@@ -1,0 +1,16 @@
+fredapi
+akshare
+yfinance
+openbb
+nelson_siegel_svensson
+statsmodels
+pandas
+numpy
+scipy
+scikit-learn
+anthropic
+python-dotenv
+APScheduler
+python-telegram-bot
+sqlalchemy
+python-dateutil
