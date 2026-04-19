@@ -216,12 +216,13 @@ def send_error_notification(date_str, phase, error_type, error_message):
     try:
         import telegram
         import asyncio
+        from config.settings import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
         async def _send():
             bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
             await bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg)
         asyncio.run(_send())
-    except:
-        print(msg)
+    except Exception as e:
+        print(f"[send_error_notification] failed: {e}\n{msg}")
 
 
 if __name__ == "__main__":

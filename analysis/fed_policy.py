@@ -1,13 +1,6 @@
 """L2.2 联储政策模块"""
 import db
-import numpy as np
-from datetime import date, timedelta
-
-def _v(d, key):
-    item = d.get(key)
-    if item is None:
-        return None
-    return item.get("value") if isinstance(item, dict) else None
+from analysis.utils import _v, query_db_n_days_ago, rolling_correlation
 
 def compute_fed_policy(data):
     tips_10y   = _v(data, "DFII10")
@@ -46,31 +39,19 @@ def compute_fed_policy(data):
         "anomaly_yield_policy_inversion": anomaly_yield_policy_inversion
     }
 
-def query_db_n_days_ago(series_id, n):
-    target = date.today() - timedelta(days=n)
-    rows = db.get_latest_indicator_before(series_id, target.isoformat(), limit=1)
-    return rows[0]["value"] if rows else None
-
-def rolling_correlation(series_a, series_b, window):
-    today = date.today().isoformat()
-    conn = db.get_conn()
-    c = conn.cursor()
-    c.execute(f"SELECT value FROM daily_indicators WHERE series_id=? AND date <= ? ORDER BY date DESC LIMIT ?",
-              (series_a, today, window))
-    a_vals = [r["value"] for r in c.fetchall()]
-    c.execute(f"SELECT value FROM daily_indicators WHERE series_id=? AND date <= ? ORDER BY date DESC LIMIT ?",
-              (series_b, today, window))
-    b_vals = [r["value"] for r in c.fetchall()]
-    conn.close()
-    if len(a_vals) < 10 or len(b_vals) < 10:
-        return 0.0
-    a_vals = list(reversed(a_vals))
-    b_vals = list(reversed(b_vals))
-    min_len = min(len(a_vals), len(b_vals))
-    if min_len < 10:
-        return 0.0
-    corr = np.corrcoef(a_vals[-min_len:], b_vals[-min_len:])[0, 1]
-    return float(corr) if not np.isnan(corr) else 0.0
-
 def query_recent_fomc_stance():
-    return "neutral"
+    """
+    从 qualitative_context 读取近7日 Fed 讲话的鹰/鸽立场。
+    返回 'dovish' | 'hawkish' | 'neutral'
+    """
+    speeches = db.get_latest_qualitative("fed_speech_tracker", last_n_days=7)
+    if not speeches:
+        return "neutral"
+    # speeches 是 list of list，每个元素是 dict 或 None
+    all_items = speeches[0] if isinstance(speeches[0], list) else speeches
+    labels = [s.get("hawkish_dovish_label") for s in all_items if s and s.get("hawkish_dovish_label")]
+    if not labels:
+        return "neutral"
+    from collections import Counter
+    majority = Counter(labels).most_common(1)[0][0]
+    return majority

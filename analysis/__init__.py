@@ -9,6 +9,7 @@ from analysis.dxy import compute_dxy
 from analysis.energy import compute_energy
 from analysis.gold import compute_gold
 from analysis.cycle import compute_cycle_state
+from analysis.utils import rolling_correlation
 import db
 
 
@@ -98,7 +99,7 @@ def run_analysis(target_date_str):
     energy_result = compute_energy(data)
     gold_result   = compute_gold(data)
 
-    anomaly_flags = aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data)
+    anomaly_flags = aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data, target_date_str)
 
     snapshot_for_cycle = {
         "vix": _v(data, "VIXCLS"),
@@ -209,7 +210,7 @@ def compute_daily_change(target_date_str, data):
     return dc
 
 
-def aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data):
+def aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data, target_date_str):
     flags = []
     if fed_result.get("anomaly_yield_policy_inversion"):
         flags.append("yield_policy_inversion")
@@ -218,7 +219,7 @@ def aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data):
     if dxy_result.get("em_pressure_flag"):
         flags.append("em_pressure")
 
-    gold_5d_ago = db.get_latest_indicator_before("GOLD", target_date_str := data.get("date", ""), limit=1)
+    gold_5d_ago = db.get_latest_indicator_before("GOLD", target_date_str, limit=1)
     dxy_5d_ago  = db.get_latest_indicator_before("DTWEXBGS", target_date_str, limit=1)
     gold_today  = _v(data, "GOLD")
     dxy_today   = _v(data, "DTWEXBGS")
@@ -233,29 +234,6 @@ def aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data):
     if hy_vix_corr < 0.3:
         flags.append("credit_vix_divergence")
     return flags
-
-
-def rolling_correlation(series_a, series_b, window):
-    import numpy as np
-    today = date.today().isoformat()
-    conn = db.get_conn()
-    c = conn.cursor()
-    c.execute(f"SELECT value FROM daily_indicators WHERE series_id=? AND date <= ? ORDER BY date DESC LIMIT ?",
-              (series_a, today, window))
-    a_vals = [r["value"] for r in c.fetchall()]
-    c.execute(f"SELECT value FROM daily_indicators WHERE series_id=? AND date <= ? ORDER BY date DESC LIMIT ?",
-              (series_b, today, window))
-    b_vals = [r["value"] for r in c.fetchall()]
-    conn.close()
-    if len(a_vals) < 10 or len(b_vals) < 10:
-        return 0.0
-    a_vals = list(reversed(a_vals))
-    b_vals = list(reversed(b_vals))
-    min_len = min(len(a_vals), len(b_vals))
-    if min_len < 10:
-        return 0.0
-    corr = np.corrcoef(a_vals[-min_len:], b_vals[-min_len:])[0, 1]
-    return float(corr) if not np.isnan(corr) else 0.0
 
 
 def l2_completion_assert(payload):

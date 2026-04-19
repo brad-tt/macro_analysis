@@ -1,12 +1,7 @@
 """L2.4 能源模块"""
-import db
 from datetime import date, timedelta
-
-def _v(d, key):
-    item = d.get(key)
-    if item is None:
-        return None
-    return item.get("value") if isinstance(item, dict) else None
+import db
+from analysis.utils import _v, query_db_n_days_ago
 
 def compute_energy(data):
     wti = _v(data, "DCOILWTICO")
@@ -32,7 +27,6 @@ def compute_energy(data):
     energy_divergence = (wti_20d_delta > 5) and (xle_20d_return < 0)
 
     # 油价传导时滞评分：WTI变动 → 4-6周后CPI响应
-    # 基于 WTI 20d 变动幅度评估通胀传导压力
     oil_cpi_lag_score = 0
     if wti is not None and wti_20d_delta is not None:
         if wti_20d_delta > 15:    oil_cpi_lag_score = 2
@@ -52,17 +46,25 @@ def compute_energy(data):
         "wti_20d_delta":         round(wti_20d_delta, 2),
         "cpi_latest":            round(cpi_yoy, 2) if cpi_yoy is not None else None,
         "oil_cpi_lag_score":     oil_cpi_lag_score,
-        "stagflation_flag":       stagflation_flag,
+        "stagflation_flag":      stagflation_flag,
         "energy_divergence_flag": energy_divergence,
         "energy_score":           energy_score
     }
 
-def query_db_n_days_ago(series_id, n):
-    target = date.today() - timedelta(days=n)
-    rows = db.get_latest_indicator_before(series_id, target.isoformat(), limit=1)
-    return rows[0]["value"] if rows else None
-
 def query_latest_pmi():
+    """从 FRED 获取最新 ISM 制造业 PMI (MANUM)"""
+    try:
+        from fredapi import Fred
+        from config.settings import FRED_API_KEY
+        if not FRED_API_KEY:
+            return None
+        fred = Fred(api_key=FRED_API_KEY)
+        series = fred.get_series("MANUM", observation_start=(date.today() - timedelta(days=60)).isoformat())
+        series = series.dropna()
+        if not series.empty:
+            return round(float(series.iloc[-1]), 1)
+    except Exception:
+        pass
     return None
 
 def get_etf_return(ticker, days):
@@ -72,11 +74,12 @@ def get_etf_return(ticker, days):
     end = date.today()
     start = end - timedelta(days=days + 5)
     try:
-        obj = yf.Ticker(ticker)
-        hist = obj.history(start=start, end=end + timedelta(days=1))
+        hist = yf.Ticker(ticker).history(start=start, end=end + timedelta(days=1))
         if hist.empty or len(hist) < 2:
             return 0.0
-        ret = (hist["Close"].iloc[-1] / hist["Close"].iloc[0] - 1) * 100
-        return round(ret, 2)
+        prices = hist["Close"].dropna()
+        if len(prices) < 2:
+            return 0.0
+        return (prices.iloc[-1] - prices.iloc[0]) / prices.iloc[0] * 100
     except Exception:
         return 0.0

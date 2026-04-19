@@ -1,6 +1,7 @@
 """L2.6 宏观周期状态机"""
 import db
 from datetime import date, timedelta
+from analysis.utils import query_db_n_days_ago
 
 CYCLE_RULES = [
     {
@@ -68,9 +69,13 @@ def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, sna
 
     spread_2_10_60d_ago = query_db_n_days_ago("DGS10", 60)
     spread_2_10_2y_ago  = query_db_n_days_ago("DGS2", 60)
-    spread_2_10_delta_60d = (spread_2_10 - (spread_2_10_60d_ago - (query_db_n_days_ago("DGS2", 60) or spread_2_10_2y_ago or spread_2_10))) if spread_2_10_60d_ago else None
+    spread_2_10_delta_60d = (
+        (spread_2_10 - (spread_2_10_60d_ago - (query_db_n_days_ago("DGS2", 60) or spread_2_10_2y_ago or spread_2_10)))
+        if spread_2_10_60d_ago else None
+    )
 
-    pmi_20d_ago = query_db_n_days_ago("SPX", 20)  # 借用SPX近似，实际应为PMI
+    # PMI 20天变化：使用ISM制造业PMI (MANUM)，不再用SPX代替
+    pmi_20d_ago = query_db_n_days_ago("MANUM", 20)
     pmi_delta_20d = (pmi - pmi_20d_ago) if (pmi and pmi_20d_ago) else None
 
     context = {
@@ -97,7 +102,7 @@ def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, sna
             try:
                 if cond(val):
                     satisfied += 1
-            except:
+            except Exception:
                 pass
         total = len(rule["conditions"])
         scores[rule["state"]] = (satisfied / total) * rule["weight"] if total > 0 else 0
@@ -114,10 +119,17 @@ def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, sna
     return best_state, int(best_score * 100)
 
 def query_latest_pmi():
-    """PMI需额外数据源，简化返回 None"""
+    """从 FRED 获取最新 ISM 制造业 PMI (MANUM)"""
+    try:
+        from fredapi import Fred
+        from config.settings import FRED_API_KEY
+        if not FRED_API_KEY:
+            return None
+        fred = Fred(api_key=FRED_API_KEY)
+        series = fred.get_series("MANUM", observation_start=(date.today() - timedelta(days=60)).isoformat())
+        series = series.dropna()
+        if not series.empty:
+            return round(float(series.iloc[-1]), 1)
+    except Exception:
+        pass
     return None
-
-def query_db_n_days_ago(series_id, n):
-    target = date.today() - timedelta(days=n)
-    rows = db.get_latest_indicator_before(series_id, target.isoformat(), limit=1)
-    return rows[0]["value"] if rows else None
