@@ -89,7 +89,7 @@ def _fetch_treasury_rates(target_date):
             if col_name not in latest_row:
                 logger.warning(f"[L1] treasury_rates: column '{col_name}' not found")
                 continue
-            val = float(latest_row[col_name])
+            val = float(latest_row[col_name]) * 100   # treasury_rates() 返回小数，转为百分比
             lo, hi = next(i["valid_range"] for i in INDICATORS_MANIFEST if i["id"] == series_id)
             if not (lo <= val <= hi):
                 logger.warning(f"[L1] {series_id}={val} out of range [{lo},{hi}]")
@@ -164,6 +164,8 @@ def fetch_openbb_indicator(indicator, target_date):
                 break
         if value_col is None:
             value_col = valid.columns[-1]
+
+        logger.debug(f"[{indicator['id']}] value_col='{value_col}', latest={valid[value_col].dropna().iloc[-1] if not valid[value_col].dropna().empty else None}, columns={list(valid.columns)}")
 
         latest_val = valid[value_col].dropna().iloc[-1] if not valid[value_col].dropna().empty else None
         fetched_date = valid.index[-1].date() if not valid.empty else None

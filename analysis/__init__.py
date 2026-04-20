@@ -96,10 +96,10 @@ def run_analysis(target_date_str):
             data[ind["id"]] = None
 
     curve_result  = compute_yield_curve(data)
-    fed_result    = compute_fed_policy(data)
-    dxy_result    = compute_dxy(data)
-    energy_result = compute_energy(data)
-    gold_result   = compute_gold(data)
+    fed_result    = compute_fed_policy(data, base_date=target_date_str)
+    dxy_result    = compute_dxy(data, base_date=target_date_str)
+    energy_result = compute_energy(data, base_date=target_date_str)
+    gold_result   = compute_gold(data, base_date=target_date_str)
 
     anomaly_flags = aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data, target_date_str)
 

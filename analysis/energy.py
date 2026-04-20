@@ -4,20 +4,25 @@ import db
 from analysis.utils import _v, query_db_n_days_ago
 from config.thresholds import ENERGY_THRESHOLDS as ET
 
-def compute_energy(data):
+def compute_energy(data, base_date=None):
     wti = _v(data, "WTI")  # v3: WTI (was DCOILWTICO)
     cpi_val = _v(data, "CPIAUCSL")
     vix = _v(data, "VIXCLS")
 
-    wti_20d_ago = query_db_n_days_ago("WTI", 20)
+    wti_20d_ago = query_db_n_days_ago("WTI", 20, base_date=base_date)
     wti_20d_delta = (wti - wti_20d_ago) if (wti is not None and wti_20d_ago is not None) else 0.0
 
     # CPI 同比计算（需12个月前数据）
     cpi_yoy = None
     if cpi_val is not None:
-        cpi_12m_ago = query_db_n_days_ago("CPIAUCSL", 365)
+        cpi_12m_ago = query_db_n_days_ago("CPIAUCSL", 365, base_date=base_date)
         if cpi_12m_ago and cpi_12m_ago > 0:
             cpi_yoy = (cpi_val - cpi_12m_ago) / cpi_12m_ago * 100
+            # 合理性校验：CPI YoY 应在 -5% ~ 25% 之间
+            if not (-5 <= cpi_yoy <= 25):
+                import logging
+                logging.warning(f"[energy] CPI YoY out of range: {cpi_yoy:.2f}%, cpi_val={cpi_val}, cpi_12m_ago={cpi_12m_ago}")
+                cpi_yoy = None
 
     # 滞胀标志：WTI > $90 + CPI YoY > 3.5% + PMI < 50
     stagflation_flag = False

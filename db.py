@@ -113,25 +113,38 @@ def get_latest_qualitative(source_id, last_n_days=7):
     return [json.loads(r["content"]) for r in rows]
 
 def get_weekly_change(date_str):
-    """计算每周变化：当日值 vs 7天前（跳过周末/假日自动回溯）"""
+    """
+    计算每周变化：当日值 vs 最近的7天前有效交易日数据（自动回溯跳过周末/假日）
+    回溯窗口：7~11天前，取最近的有效数据
+    """
     from datetime import date, timedelta
     target = date.fromisoformat(date_str)
-    week_ago = (target - timedelta(days=7)).isoformat()
+
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT date, series_id, value FROM daily_indicators WHERE date=? OR date=?",
-              (date_str, week_ago))
-    rows = c.fetchall()
-    conn.close()
-    by_series = {}
-    for r in rows:
-        by_series.setdefault(r["series_id"], {})[r["date"]] = r["value"]
+
+    # 查今日所有数据
+    c.execute("SELECT series_id, value FROM daily_indicators WHERE date=?", (date_str,))
+    today_rows = {r["series_id"]: r["value"] for r in c.fetchall()}
+
+    # 回溯找7~11天前的最近有效数据（覆盖周末+假日组合）
     weekly = {}
-    for series_id, values in by_series.items():
-        today_val = values.get(date_str)
-        week_val = values.get(week_ago)
-        if today_val is not None and week_val is not None and week_val != 0:
-            weekly[f"{series_id}_7d_delta"] = round(today_val - week_val, 4)
+    for series_id, today_val in today_rows.items():
+        if today_val is None:
+            continue
+        for days_back in range(7, 12):   # 7天前开始，最多回溯到11天前
+            prev_date = (target - timedelta(days=days_back)).isoformat()
+            c.execute(
+                "SELECT value FROM daily_indicators WHERE date=? AND series_id=?",
+                (prev_date, series_id)
+            )
+            row = c.fetchone()
+            if row and row["value"] is not None:
+                delta = round(today_val - row["value"], 4)
+                weekly[f"{series_id}_7d_delta"] = delta
+                break   # 找到最近有效数据即停止回溯
+
+    conn.close()
     return weekly
 
 def update_report(date, content, sent_at=None, send_status='pending'):

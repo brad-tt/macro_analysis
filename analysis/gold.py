@@ -2,7 +2,7 @@
 from analysis.utils import _v, query_db_n_days_ago, rolling_correlation
 from config.thresholds import GOLD_THRESHOLDS as GT
 
-def compute_gold(data):
+def compute_gold(data, base_date=None):
     gold = _v(data, "GOLD")
     tips = _v(data, "DFII10")
     dxy  = _v(data, "DXY")
@@ -13,7 +13,7 @@ def compute_gold(data):
 
     anomaly_gold_realrate_decorrelation = gold_realrate_corr > GT["realrate_corr_anomaly"]
 
-    gold_5d_ago = query_db_n_days_ago("GOLD", 5)
+    gold_5d_ago = query_db_n_days_ago("GOLD", 5, base_date=base_date)
     gold_5d_return = ((gold - gold_5d_ago) / gold_5d_ago) if (gold is not None and gold_5d_ago) else 0.0
 
     if anomaly_gold_realrate_decorrelation:

@@ -19,9 +19,15 @@ def _v(d, key):
     return item.get("value") if isinstance(item, dict) else None
 
 
-def query_db_n_days_ago(series_id, n):
-    """从数据库查询N天前的指标值（自动跳过周末/假日回溯）"""
-    target = date.today() - timedelta(days=n)
+def query_db_n_days_ago(series_id, n, base_date=None):
+    """
+    查询 N 天前的指标值，自动回溯跳过周末/假日。
+    base_date: 基准日期字符串 YYYY-MM-DD，默认为今天。
+               传入 target_date_str 可支持历史日期运行。
+    """
+    if base_date is None:
+        base_date = date.today().isoformat()
+    target = date.fromisoformat(base_date) - timedelta(days=n)
     rows = db.get_latest_indicator_before(series_id, target.isoformat(), limit=1)
     return rows[0]["value"] if rows else None
 

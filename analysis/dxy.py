@@ -2,11 +2,11 @@
 from analysis.utils import _v, query_db_n_days_ago, rolling_correlation
 from config.thresholds import DXY_THRESHOLDS as DT
 
-def compute_dxy(data):
+def compute_dxy(data, base_date=None):
     # v3 命名：DXY 而非 DTWEXBGS
     dxy = _v(data, "DXY")
 
-    dxy_20d_ago = query_db_n_days_ago("DXY", 20)
+    dxy_20d_ago = query_db_n_days_ago("DXY", 20, base_date=base_date)
 
     if dxy is not None and dxy_20d_ago:
         dxy_trend = (dxy - dxy_20d_ago) / dxy_20d_ago * 100
@@ -47,7 +47,7 @@ def compute_dxy(data):
     if cn_data_available and dgs10 is not None:
         cn_us_spread = round(cn10y - dgs10, 4)
 
-        usdcny_20d    = query_db_n_days_ago("USDCNY", 20)
+        usdcny_20d    = query_db_n_days_ago("USDCNY", 20, base_date=base_date)
         cny_weakening = (usdcny > usdcny_20d * DT["cny_weakening_rate"]) if usdcny_20d else False
 
         # 中美利差扩大（<-1%）且人民币同步走弱 → 双重 DXY 上行压力

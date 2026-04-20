@@ -3,13 +3,13 @@ import db
 from analysis.utils import _v, query_db_n_days_ago, rolling_correlation
 from config.thresholds import FED_THRESHOLDS as FT
 
-def compute_fed_policy(data):
+def compute_fed_policy(data, base_date=None):
     tips_10y   = _v(data, "DFII10")
     breakeven   = _v(data, "T10YIE")
 
     tips_5d_delta = None
     if tips_10y is not None:
-        prev_tips = query_db_n_days_ago("DFII10", 5)
+        prev_tips = query_db_n_days_ago("DFII10", 5, base_date=base_date)
         if prev_tips is not None:
             tips_5d_delta = tips_10y - prev_tips
 
