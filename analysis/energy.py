@@ -2,13 +2,14 @@
 from datetime import date, timedelta
 import db
 from analysis.utils import _v, query_db_n_days_ago
+from config.thresholds import ENERGY_THRESHOLDS as ET
 
 def compute_energy(data):
     wti = _v(data, "WTI")  # v3: WTI (was DCOILWTICO)
     cpi_val = _v(data, "CPIAUCSL")
     vix = _v(data, "VIXCLS")
 
-    wti_20d_ago = query_db_n_days_ago("WTI", 20)  # v3
+    wti_20d_ago = query_db_n_days_ago("WTI", 20)
     wti_20d_delta = (wti - wti_20d_ago) if (wti is not None and wti_20d_ago is not None) else 0.0
 
     # CPI 同比计算（需12个月前数据）
@@ -18,28 +19,41 @@ def compute_energy(data):
         if cpi_12m_ago and cpi_12m_ago > 0:
             cpi_yoy = (cpi_val - cpi_12m_ago) / cpi_12m_ago * 100
 
+    # 滞胀标志：WTI > $90 + CPI YoY > 3.5% + PMI < 50
     stagflation_flag = False
     if wti is not None and cpi_yoy is not None:
         pmi = query_latest_pmi()
-        stagflation_flag = (wti > 90) and (cpi_yoy > 3.5) and (pmi is not None and pmi < 50)
+        stagflation_flag = (
+            wti > ET["wti_stagflation"] and
+            cpi_yoy > ET["cpi_yoy_stagflation"] and
+            pmi is not None and pmi < ET["pmi_stagflation"]
+        )
 
     xle_20d_return = get_etf_return("XLE", 20)
-    energy_divergence = (wti_20d_delta > 5) and (xle_20d_return < 0)
+    energy_divergence = (wti_20d_delta > ET["wti_divergence_delta"]) and (xle_20d_return < 0)
 
-    # 油价传导时滞评分：WTI变动 → 4-6周后CPI响应
+    # 油价传导时滞评分
     oil_cpi_lag_score = 0
     if wti is not None and wti_20d_delta is not None:
-        if wti_20d_delta > 15:    oil_cpi_lag_score = 2
-        elif wti_20d_delta > 5:   oil_cpi_lag_score = 1
-        elif wti_20d_delta < -15: oil_cpi_lag_score = -2
-        elif wti_20d_delta < -5:  oil_cpi_lag_score = -1
+        if wti_20d_delta > ET["oil_lag_positive_major"]:
+            oil_cpi_lag_score = 2
+        elif wti_20d_delta > ET["oil_lag_positive_minor"]:
+            oil_cpi_lag_score = 1
+        elif wti_20d_delta < ET["oil_lag_negative_major"]:
+            oil_cpi_lag_score = -2
+        elif wti_20d_delta < ET["oil_lag_negative_minor"]:
+            oil_cpi_lag_score = -1
 
     if wti is None:
         energy_score = 0
-    elif wti < 70:       energy_score = 2
-    elif wti < 85:       energy_score = 1
-    elif wti < 95:       energy_score = -1
-    else:                energy_score = -2
+    elif wti < ET["wti_bearish_low"]:
+        energy_score = 2
+    elif wti < ET["wti_bearish_high"]:
+        energy_score = 1
+    elif wti < ET["wti_neutral"]:
+        energy_score = -1
+    else:
+        energy_score = -2
 
     return {
         "wti":                   round(wti, 2) if wti is not None else None,
@@ -59,7 +73,6 @@ def query_latest_pmi():
     import db as _db
     from datetime import date, timedelta
     try:
-        # 尝试从本地 qualitative 数据源获取（近7日内）
         pmi_data = _db.get_latest_qualitative("ism_pmi", last_n_days=7)
         if pmi_data and len(pmi_data) > 0:
             latest = pmi_data[0]
@@ -69,7 +82,6 @@ def query_latest_pmi():
     except Exception:
         pass
 
-    # Fallback: 仍尝试 OpenBB/FRED（返回 None 也不影响主流程）
     try:
         from config.settings import FRED_API_KEY
         from openbb import obb

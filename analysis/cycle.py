@@ -1,27 +1,28 @@
-"""L2.6 宏观周期状态机"""
+"""L2.6 宏观周期状态机 — v3"""
 import db
 from datetime import date, timedelta
 from analysis.utils import query_db_n_days_ago
 from config.settings import FRED_API_KEY
+from config.thresholds import CYCLE_THRESHOLDS as CT
 
 CYCLE_RULES = [
     {
         "state": "expansion",
         "conditions": [
             ("curve_score", lambda x: x > 0),
-            ("pmi", lambda pmi: pmi and pmi > 50),
-            ("hy_spread_delta_20d", lambda d: d is not None and d < 0),
-            ("vix", lambda v: v < 20),
+            ("pmi", lambda pmi: pmi and pmi > CT["pmi_expansion"]),
+            ("hy_spread_delta_20d", lambda d: d is not None and d < CT["hy_spread_delta_20d_sign"]),
+            ("vix", lambda v: v < CT["vix_expansion"]),
         ],
         "weight": 1.0
     },
     {
         "state": "overheating",
         "conditions": [
-            ("cpi", lambda c: c and c > 3.0),
-            ("tips_5d_delta", lambda d: d is not None and d > 0),
-            ("abs_spread_2_10", lambda s: s is not None and abs(s) < 0.5),
-            ("wti", lambda w: w and w > 80),
+            ("cpi", lambda c: c and c > CT["cpi_overheating"]),
+            ("tips_5d_delta", lambda d: d is not None and d > CT["tips_5d_positive"]),
+            ("abs_spread_2_10", lambda s: s is not None and abs(s) < CT["spread_2_10_flat_threshold"]),
+            ("wti", lambda w: w and w > CT["wti_overheating"]),
         ],
         "weight": 1.0
     },
@@ -35,19 +36,19 @@ CYCLE_RULES = [
     {
         "state": "recession",
         "conditions": [
-            ("inversion_days", lambda d: d > 60),
-            ("pmi", lambda p: p and p < 48),
-            ("hy_spread", lambda s: s and s > 500),
-            ("vix", lambda v: v > 25),
+            ("inversion_days", lambda d: d > CT["inversion_days_recession"]),
+            ("pmi", lambda p: p and p < CT["pmi_recession"]),
+            ("hy_spread", lambda s: s and s > CT["hy_spread_recession"]),
+            ("vix", lambda v: v > CT["vix_recession"]),
         ],
         "weight": 1.0
     },
     {
         "state": "recovery",
         "conditions": [
-            ("spread_2_10_delta_60d", lambda d: d is not None and d > 0.3),
-            ("pmi_delta_20d", lambda d: d is not None and d > 2),
-            ("tips_5d_delta", lambda d: d is not None and d < -0.05),
+            ("spread_2_10_delta_60d", lambda d: d is not None and d > CT["spread_2_10_delta_recovery"]),
+            ("pmi_delta_20d", lambda d: d is not None and d > CT["pmi_delta_recovery"]),
+            ("tips_5d_delta", lambda d: d is not None and d < CT["tips_5d_recovery_negative"]),
         ],
         "weight": 1.0
     },
@@ -65,7 +66,8 @@ def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, sna
     stagflation_flag = energy_result.get("stagflation_flag", False)
     inversion_days = curve_result["inversion_days"]
 
-    hy_spread_20d_ago = query_db_n_days_ago("HY_SPREAD", 20)  # v3: HY_SPREAD (was BAMLH0A0HYM2)
+    # v3: HY_SPREAD（不再是 BAMLH0A0HYM2）
+    hy_spread_20d_ago = query_db_n_days_ago("HY_SPREAD", 20)
     hy_spread_delta_20d = hy_spread - hy_spread_20d_ago if (hy_spread and hy_spread_20d_ago) else None
 
     spread_2_10_60d_ago = query_db_n_days_ago("DGS10", 60)

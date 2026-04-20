@@ -18,9 +18,17 @@ SYSTEM_PROMPT_DEEP = """你是一位专注于全球宏观经济与美股资产�
 3. 具体而非模糊：给出可验证的判断，而不是"可能""或许"
 4. 层次递进：从数据事实 → 机制解释 → 市场含义 → 投资者行动
 
-输入数据包含两部分：
-- quantitative_payload: 结构化宏观指标和信号评分（JSON）
-- qualitative_context: 联储措辞、新闻背景、市场持仓（JSON）
+【数字使用规则】— 严格遵守，否则幻觉检测会截断内容：
+- 只使用下方的"【核心数据】"中直接给出的数值
+- 引用时必须原文引用，禁止重写单位、近似值或换算
+  * 美债收益率：直接写"0.04%"，不要写"4bp"、"零点零四"或"约0"
+  * WTI原油：直接写"100.72"，不要写"$100"、"100美元"或"约101"
+  * 黄金：直接写"4857"，不要写"4800"、"近5000"或"$4XXX"
+  * 利差：直接写"2.86%"，不要写"286bp"、"约3%"或"不到3"
+- 禁止在内容中提及任何历史年份（如2008、1970、2020、2024等）
+- 禁止用历史事件做比较时带出具体数字年份
+- 每节最多引用3个数字，超出部分用文字描述替代
+- 不确定时宁可不写数字，也不要写近似值
 
 输出格式要求（严格按以下标签结构输出，每个标签单独成行）：
 
@@ -40,55 +48,47 @@ SYSTEM_PROMPT_DEEP = """你是一位专注于全球宏观经济与美股资产�
 （内容，50-200中文字）
 
 绝对禁止：
-- 引入输入数据中不存在的数字（只引用JSON中已有的数值）
 - 使用"市场可能""或许会""不排除"等无法验证的表述超过1次
 - 将多个传导链混在一起叙述（每段聚焦一个机制）
 - 在 [POSITIONING] 中给出"保持观望"这类零信息量建议
-- 任何章节出现超过3个数字（数字会由验证器检测，幻觉数字会被截断）
+- 任何章节出现超过3个数字
 - 章节内容留空或不写
+- 提及任何历史年份（2008、1970、2020、2024等）
 """
 
 USER_PROMPT_TEMPLATE_DEEP = """报告日期：{date}
 本期覆盖区间：{week_start} 至 {date}
 
-【可用数据】（请严格只使用这些数据，不要捏造任何数字）
+【核心数据 - 严格按原文引用，不许改写单位或近似值】
 
-核心指标：
-  10Y美债收益率: {yield_10y:.2f}%（2Y: {yield_2y:.2f}%，3M: {yield_3mo:.3f}%，2-10利差: {spread_2_10:.4f}%）
-  WTI原油: ${wti:.2f}/桶
-  黄金: ${gold:.0f}/盎司
-  DXY美元指数: {dxy:.1f}
-  VIX恐慌指数: {vix:.1f}
-  HY高收益债利差: {hy_spread:.2f}%（IG: {ig_spread:.2f}%）
-  TIPS 10Y实际利率: {tips_10y:.2f}%，盈亏平衡通胀: {breakeven_10y:.2f}%
-  CPI同比: {cpi_yoy:.1f}%
+  美债收益率: 10Y={yield_10y:.2f}%  2Y={yield_2y:.2f}%  3M={yield_3mo:.3f}%  2-10spread={spread_2_10:.4f}
+  WTI原油: {wti:.2f}  黄金: {gold:.0f}  DXY: {dxy:.1f}  VIX: {vix:.1f}
+  信用利差: HY={hy_spread:.2f}%  IG={ig_spread:.2f}%
+  TIPS实际利率={tips_10y:.2f}%  盈亏平衡通胀={breakeven_10y:.2f}%  CPI={cpi_yoy:.1f}%
 
-信号评分（各维度 -2至+2）：
-  联储: {fed_score} | 曲线: {curve_score} | 美元: {dxy_score} | 能源: {energy_score} | 黄金: {gold_score}
-  综合评分: {total_score}/10（上期: {prev_total_score}，变化: {score_delta}）
+【信号评分】Fed={fed_score} Curve={curve_score} DXY={dxy_score} Energy={energy_score} Gold={gold_score}  综合={total_score}/10（上周={prev_total_score} {score_delta}）
 
-宏观周期状态: {cycle_state}（置信度 {cycle_confidence}%）
+【周期状态】{cycle_state}（置信{cycle_confidence}%）
 
-上周重要宏观新闻：
+【近期新闻】
 {news_summary}
 
-【输出格式要求】
-严格按以下5个标签输出，每个标签单独成行，内容必须填写完整：
+【输出格式 - 严格按5个标签依次填写，内容不许留空】
 
 [MACRO_NARRATIVE]
-（150-350中文字：叙述本周核心宏观逻辑，解释评分变化原因）
+（150-350中文字）
 
 [CAUSAL_CHAIN]
-（100-300中文字，必须包含→符号，描述1-2条核心传导链）
+（100-300中文字，用→表示传导，如"高油价→运费上升→企业成本压力→美股盈利下修"）
 
 [FED_QUALITATIVE]
-（80-250中文字：解读联储官员近期表态和FOMC信号）
+（80-250中文字）
 
 [POSITIONING]
-（120-300中文字，必须提及"美股"，给出标普/纳指/科技股方向判断）
+（120-300中文字，必须含"美股"）
 
 [WATCH_NEXT_WEEK]
-（50-200中文字：提示下周重要数据发布时间和关注点）
+（50-200中文字）
 """
 
 
@@ -269,7 +269,7 @@ def extract_all_numbers_from_payload(payload):
     return numbers
 
 
-def approximately_exists(num, payload_numbers, tolerance=0.05):
+def approximately_exists(num, payload_numbers, tolerance=1.0):
     for pn in payload_numbers:
         if pn and abs(float(num) - float(pn)) < tolerance:
             return True

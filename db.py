@@ -220,3 +220,34 @@ def count_p0_non_stale(date):
     cnt = c.fetchone()["cnt"]
     conn.close()
     return cnt
+
+def get_historical_pivot_df(end_date_str, window=45):
+    """返回以 date 为 index、series_id 为 columns 的 pivot DataFrame
+    每个指标最多取 end_date 往前 window 天内的数据，按日期正序排列"""
+    import pandas as pd
+    from datetime import date, timedelta
+
+    end_date = date.fromisoformat(end_date_str)
+    start_date = (end_date - timedelta(days=window)).isoformat()
+
+    conn = get_conn()
+    try:
+        df = pd.read_sql_query(
+            """
+            SELECT date, series_id, value
+            FROM daily_indicators
+            WHERE date >= ? AND date <= ?
+            ORDER BY date ASC
+            """,
+            conn,
+            params=[start_date, end_date_str],
+        )
+    finally:
+        conn.close()
+
+    if df.empty:
+        return pd.DataFrame()
+
+    pivot = df.pivot(index="date", columns="series_id", values="value")
+    pivot = pivot.sort_index()
+    return pivot

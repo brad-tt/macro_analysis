@@ -5,7 +5,7 @@ L1.2 定性数据采集
 import logging
 import re
 import json
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from bs4 import BeautifulSoup
 import requests
 
@@ -241,6 +241,28 @@ def fetch_economic_calendar(target_date_str):
 # ─────────────────────────────────────────────
 # 4. News Macro Headlines
 # ─────────────────────────────────────────────
+def _parse_rss_date(date_str):
+    """解析 RSS pubDate 字符串，返回 date 或 None"""
+    if not date_str:
+        return None
+    # 清理常见时区标记
+    cleaned = (date_str
+               .replace(" GMT", " +0000")
+               .replace(" UTC", " +0000")
+               .replace("-0500", " -0500").replace("-0400", " -0400"))
+    formats = [
+        "%a, %d %b %Y %H:%M:%S %z",   # Dow Jones: "Mon, 27 Jan 2025 14:26:00 -0500"
+        "%Y-%m-%dT%H:%M:%SZ",          # ISO: "2026-04-20T04:38:20Z"
+        "%Y-%m-%dT%H:%M:%S%z",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(cleaned, fmt).date()
+        except Exception:
+            pass
+    return None
+
+
 def fetch_news_headlines(target_date_str):
     """
     解析 Yahoo Finance / Dow Jones / MarketWatch / CNBC RSS，筛选宏观相关新闻标题
@@ -263,19 +285,27 @@ def fetch_news_headlines(target_date_str):
     ]
 
     headlines = []
+    target_date = date.fromisoformat(target_date_str)
     for source_name, url in RSS_URLS:
         try:
             resp = requests.get(url, headers=HEADERS, timeout=10)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "xml")
             items = soup.select("item") or soup.select("entry")
-            for item in items[:20]:
+            for item in items[:30]:  # 抓更多条目，日期过滤后再截断
                 title = item.select_one("title")
                 if not title:
                     continue
                 title_text = title.get_text(strip=True)
                 pub = item.select_one("pubDate") or item.select_one("published")
                 pub_text = pub.get_text(strip=True) if pub else ""
+                pub_date = _parse_rss_date(pub_text)
+
+                # 跳过 3 天前的旧闻
+                if pub_date:
+                    age = abs((pub_date - target_date).days)
+                    if age > 3:
+                        continue
 
                 matched = any(kw in title_text.lower() for kw in FILTER_KEYWORDS)
                 if matched:

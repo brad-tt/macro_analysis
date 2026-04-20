@@ -9,7 +9,7 @@ from analysis.dxy import compute_dxy
 from analysis.energy import compute_energy
 from analysis.gold import compute_gold
 from analysis.cycle import compute_cycle_state
-from analysis.utils import rolling_correlation
+from analysis.utils import init_pivot_cache, rolling_correlation
 import db
 
 
@@ -81,6 +81,8 @@ def _build_positioning_context(cot_data):
 # ─────────────────────────────────────────────
 def run_analysis(target_date_str):
     """L2 主函数"""
+    init_pivot_cache(target_date_str, window=45)
+
     data = {}
     for ind in INDICATORS_MANIFEST:
         row = db.get_indicator(target_date_str, ind["id"])

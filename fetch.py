@@ -292,11 +292,30 @@ def fetch_all_indicators(target_date_str):
             if series_id in [i["id"] for i in INDICATORS_MANIFEST if i["priority"] == "P0"]:
                 missing_p0.append(series_id)
 
-    # ── 第二批：FRED/yfinance 指标（逐个抓取）────────────────
+    # ── 第二批：FRED/yfinance 指标（并发抓取 → 主线程串行写 DB）──
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     openbb_indicators = [i for i in INDICATORS_MANIFEST
                          if i["source"] == "openbb" and i["id"] not in treasury_ids]
-    for indicator in openbb_indicators:
-        value, fetched_date, is_stale = fetch_single_indicator(indicator, target_date)
+
+    # 并发获取数据（不触碰 DB），收集结果到列表
+    fetched_results = []
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {
+            executor.submit(fetch_single_indicator, ind, target_date): ind
+            for ind in openbb_indicators
+        }
+        for future in as_completed(futures):
+            indicator = futures[future]
+            try:
+                value, fetched_date, is_stale = future.result()
+            except Exception as e:
+                logger.warning(f"[L1] {indicator['id']} fetch error: {e}")
+                value, fetched_date, is_stale = None, None, 1
+            fetched_results.append((indicator, value, fetched_date, is_stale))
+
+    # 主线程串行写入 DB，同时更新 results 字典
+    for indicator, value, fetched_date, is_stale in fetched_results:
         if value is not None:
             results[indicator["id"]] = {
                 "value": value,

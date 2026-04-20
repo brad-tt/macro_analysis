@@ -1,6 +1,7 @@
 """L2.2 联储政策模块 — v3 更新：DXY 而非 DTWEXBGS"""
 import db
 from analysis.utils import _v, query_db_n_days_ago, rolling_correlation
+from config.thresholds import FED_THRESHOLDS as FT
 
 def compute_fed_policy(data):
     tips_10y   = _v(data, "DFII10")
@@ -17,19 +18,19 @@ def compute_fed_policy(data):
 
     if tips_5d_delta is None:
         fed_score = 0
-    elif tips_5d_delta > 0.15:
+    elif tips_5d_delta > FT["tips_positive_major"]:
         fed_score = -2
-    elif tips_5d_delta > 0.05:
+    elif tips_5d_delta > FT["tips_positive_minor"]:
         fed_score = -1
-    elif tips_5d_delta < -0.15:
+    elif tips_5d_delta < FT["tips_negative_major"]:
         fed_score = 2
-    elif tips_5d_delta < -0.05:
+    elif tips_5d_delta < FT["tips_negative_minor"]:
         fed_score = 1
     else:
         fed_score = 0
 
     anomaly_yield_policy_inversion = (
-        tips_5d_delta is not None and tips_5d_delta > 0.10 and
+        tips_5d_delta is not None and tips_5d_delta > FT["anomaly_yield_policy_inversion_tips"] and
         query_recent_fomc_stance() == "dovish"
     )
 
