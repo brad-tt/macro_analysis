@@ -1,14 +1,14 @@
-"""L2.5 黄金模块"""
+"""L2.5 黄金模块 — v3 更新：DXY 而非 DTWEXBGS"""
 from analysis.utils import _v, query_db_n_days_ago, rolling_correlation
 
 def compute_gold(data):
     gold = _v(data, "GOLD")
     tips = _v(data, "DFII10")
-    dxy  = _v(data, "DTWEXBGS")
+    dxy  = _v(data, "DXY")   # v3: DXY (was DTWEXBGS)
     vix  = _v(data, "VIXCLS")
 
     gold_realrate_corr = rolling_correlation("GOLD", "DFII10", window=30)
-    gold_dxy_corr      = rolling_correlation("GOLD", "DTWEXBGS", window=30)
+    gold_dxy_corr      = rolling_correlation("GOLD", "DXY", window=30)  # v3
 
     anomaly_gold_realrate_decorrelation = gold_realrate_corr > 0.2
 

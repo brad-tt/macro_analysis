@@ -2,6 +2,7 @@
 import db
 from datetime import date, timedelta
 from analysis.utils import query_db_n_days_ago
+from config.settings import FRED_API_KEY
 
 CYCLE_RULES = [
     {
@@ -64,7 +65,7 @@ def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, sna
     stagflation_flag = energy_result.get("stagflation_flag", False)
     inversion_days = curve_result["inversion_days"]
 
-    hy_spread_20d_ago = query_db_n_days_ago("BAMLH0A0HYM2", 20)
+    hy_spread_20d_ago = query_db_n_days_ago("HY_SPREAD", 20)  # v3: HY_SPREAD (was BAMLH0A0HYM2)
     hy_spread_delta_20d = hy_spread - hy_spread_20d_ago if (hy_spread and hy_spread_20d_ago) else None
 
     spread_2_10_60d_ago = query_db_n_days_ago("DGS10", 60)
@@ -119,17 +120,34 @@ def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, sna
     return best_state, int(best_score * 100)
 
 def query_latest_pmi():
-    """从 FRED 获取最新 ISM 制造业 PMI (MANUM)"""
+    """
+    从 ism_pmi qualitative 数据源获取最新 PMI（爬取自 tradingeconomics.com）。
+    FRED 的 MANUM 已于 2020-07 停止更新，不再使用。
+    """
+    import db as _db
+    from datetime import date, timedelta
     try:
-        from fredapi import Fred
+        pmi_data = _db.get_latest_qualitative("ism_pmi", last_n_days=7)
+        if pmi_data and len(pmi_data) > 0:
+            latest = pmi_data[0]
+            val = latest.get("value")
+            if val is not None:
+                return round(float(val), 1)
+    except Exception:
+        pass
+
+    try:
         from config.settings import FRED_API_KEY
+        from openbb import obb
         if not FRED_API_KEY:
             return None
-        fred = Fred(api_key=FRED_API_KEY)
-        series = fred.get_series("MANUM", observation_start=(date.today() - timedelta(days=60)).isoformat())
-        series = series.dropna()
-        if not series.empty:
-            return round(float(series.iloc[-1]), 1)
+        obb.user.credentials.fred_api_key = FRED_API_KEY
+        result = obb.economy.fred_series(symbol="MANUM", provider="fred",
+                                        start_date=(date.today() - timedelta(days=60)).isoformat())
+        df = result.to_df()
+        if not df.empty:
+            val = df["MANUM"].dropna().iloc[-1]
+            return round(float(val), 1)
     except Exception:
         pass
     return None

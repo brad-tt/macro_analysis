@@ -339,6 +339,58 @@ def fetch_cot_positioning(target_date_str):
 
 
 # ─────────────────────────────────────────────
+# 6. ISM Manufacturing PMI
+# ─────────────────────────────────────────────
+def fetch_ism_pmi(target_date_str=None):
+    """
+    从 tradingeconomics.com 抓取最新 ISM 制造业 PMI
+    （2020年后 ISM 已停止向 FRED 提供数据，改用此源）
+    """
+    import re
+    try:
+        resp = requests.get(
+            "https://tradingeconomics.com/united-states/manufacturing-pmi",
+            headers=HEADERS, timeout=15
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        all_text = soup.get_text()
+
+        # 页面结构：'ISM Manufacturing PMI52.7052.40pointsMar 2026'
+        match = re.search(r'ISM Manufacturing PMI(\d+\.\d+)(\d+\.\d+)points([A-Za-z]+)\s*(\d{4})', all_text)
+        if match:
+            current = float(match.group(1))
+            previous = float(match.group(2))
+            month_str = match.group(3)
+            year = int(match.group(4))
+            return {
+                "value": current,
+                "previous": previous,
+                "month": month_str,
+                "year": year,
+            }
+
+        # 备选：找 td 表格
+        for td in soup.find_all('td'):
+            text = td.get_text(strip=True)
+            if re.match(r'^\d+\.\d+$', text) and 40 <= float(text) <= 70:
+                parent = td.find_parent('tr')
+                if parent and 'ISM' in parent.get_text():
+                    row_text = re.findall(r'(\d+\.\d+)', parent.get_text())
+                    if len(row_text) >= 2:
+                        return {
+                            "value": float(row_text[0]),
+                            "previous": float(row_text[1]),
+                            "month": month_str if 'month_str' in dir() else date.today().strftime("%b"),
+                            "year": date.today().year,
+                        }
+    except Exception as e:
+        logger.warning(f"[L1-Qual] ism_pmi failed: {e}")
+
+    return None
+
+
+# ─────────────────────────────────────────────
 # 汇总入口
 # ─────────────────────────────────────────────
 def fetch_all_qualitative(target_date_str):
@@ -349,6 +401,7 @@ def fetch_all_qualitative(target_date_str):
         ("economic_calendar_7d", fetch_economic_calendar),
         ("news_macro_headlines",  fetch_news_headlines),
         ("market_positioning",   fetch_cot_positioning),
+        ("ism_pmi",              fetch_ism_pmi),   # 独立爬虫，非 FRED/OpenBB
     ]
 
     results = {}

@@ -1,4 +1,4 @@
-"""L3_DEEP: 每周深度报告推送"""
+"""L3_DEEP: 每周深度报告推送 — v3 更新：POSITIONING 移除港股，专注美股"""
 import json
 import re
 import logging
@@ -10,7 +10,7 @@ import db
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT_DEEP = """你是一位专注于全球宏观经济与港美股资产配置的资深分析师，拥有跨资产传导机制的深度研究背景。
+SYSTEM_PROMPT_DEEP = """你是一位专注于全球宏观经济与美股资产配置的资深分析师，拥有跨资产传导机制的深度研究背景。
 
 你的分析风格要求：
 1. 因果优先：每一个观察必须追问"为什么"，并解释传导路径
@@ -25,39 +25,70 @@ SYSTEM_PROMPT_DEEP = """你是一位专注于全球宏观经济与港美股资�
 输出格式要求（严格按以下标签结构输出，每个标签单独成行）：
 
 [MACRO_NARRATIVE]
-（内容）
+（内容，150-350中文字）
 
 [CAUSAL_CHAIN]
-（内容）
+（内容，必须包含"→"符号表示因果传导，100-300中文字）
 
 [FED_QUALITATIVE]
-（内容）
+（内容，80-250中文字）
 
 [POSITIONING]
-（内容）
+（内容，120-300中文字，必须提及"美股"以及标普500/纳斯达克/科技股等具体方向）
 
 [WATCH_NEXT_WEEK]
-（内容）
+（内容，50-200中文字）
 
 绝对禁止：
-- 引入输入数据中不存在的数字
+- 引入输入数据中不存在的数字（只引用JSON中已有的数值）
 - 使用"市场可能""或许会""不排除"等无法验证的表述超过1次
 - 将多个传导链混在一起叙述（每段聚焦一个机制）
 - 在 [POSITIONING] 中给出"保持观望"这类零信息量建议
+- 任何章节出现超过3个数字（数字会由验证器检测，幻觉数字会被截断）
+- 章节内容留空或不写
 """
 
 USER_PROMPT_TEMPLATE_DEEP = """报告日期：{date}
 本期覆盖区间：{week_start} 至 {date}
 
-定量数据（当日快照 + 本周变化）：
-{quantitative_payload_json}
+【可用数据】（请严格只使用这些数据，不要捏造任何数字）
 
-定性背景数据：
-{qualitative_context_json}
+核心指标：
+  10Y美债收益率: {yield_10y:.2f}%（2Y: {yield_2y:.2f}%，3M: {yield_3mo:.3f}%，2-10利差: {spread_2_10:.4f}%）
+  WTI原油: ${wti:.2f}/桶
+  黄金: ${gold:.0f}/盎司
+  DXY美元指数: {dxy:.1f}
+  VIX恐慌指数: {vix:.1f}
+  HY高收益债利差: {hy_spread:.2f}%（IG: {ig_spread:.2f}%）
+  TIPS 10Y实际利率: {tips_10y:.2f}%，盈亏平衡通胀: {breakeven_10y:.2f}%
+  CPI同比: {cpi_yoy:.1f}%
 
-上期（上周）综合评分：{prev_total_score}（本期：{current_total_score}，变化：{score_delta}）
+信号评分（各维度 -2至+2）：
+  联储: {fed_score} | 曲线: {curve_score} | 美元: {dxy_score} | 能源: {energy_score} | 黄金: {gold_score}
+  综合评分: {total_score}/10（上期: {prev_total_score}，变化: {score_delta}）
 
-请按指定格式生成深度周报内容。
+宏观周期状态: {cycle_state}（置信度 {cycle_confidence}%）
+
+上周重要宏观新闻：
+{news_summary}
+
+【输出格式要求】
+严格按以下5个标签输出，每个标签单独成行，内容必须填写完整：
+
+[MACRO_NARRATIVE]
+（150-350中文字：叙述本周核心宏观逻辑，解释评分变化原因）
+
+[CAUSAL_CHAIN]
+（100-300中文字，必须包含→符号，描述1-2条核心传导链）
+
+[FED_QUALITATIVE]
+（80-250中文字：解读联储官员近期表态和FOMC信号）
+
+[POSITIONING]
+（120-300中文字，必须提及"美股"，给出标普/纳指/科技股方向判断）
+
+[WATCH_NEXT_WEEK]
+（50-200中文字：提示下周重要数据发布时间和关注点）
 """
 
 
@@ -70,19 +101,55 @@ def generate_deep_report(payload, qualitative_context, prev_signal=None):
     prev_total_score = prev_signal["signals"]["total_score"] if prev_signal else 0
     score_delta = current_total_score - prev_total_score
 
+    sig = payload["signals"]
+    s = payload["snapshot"]
+    cyc = payload.get("cycle", {})
+    energy = payload.get("energy", {})
+
+    # 从定性上下文提取新闻摘要（最近7日最多5条）
+    news_items = []
+    nc = qualitative_context.get("news_context", [])
+    if nc:
+        for h in nc[:5]:
+            if isinstance(h, dict):
+                news_items.append(h.get("headline", ""))
+            elif isinstance(h, str):
+                news_items.append(h)
+        if not news_items:
+            news_items = nc[:5] if isinstance(nc, list) else []
+
     user_prompt = USER_PROMPT_TEMPLATE_DEEP.format(
         date=payload["date"],
         week_start=week_start,
-        quantitative_payload_json=json.dumps(payload, ensure_ascii=False, indent=2),
-        qualitative_context_json=json.dumps(qualitative_context, ensure_ascii=False, indent=2),
+        yield_10y=s.get("yield_10y", 0),
+        yield_2y=s.get("yield_2y", 0),
+        yield_3mo=s.get("yield_3mo", 0),
+        spread_2_10=(payload.get("curve", {}).get("spread_2_10") or 0),
+        wti=s.get("wti", 0),
+        gold=s.get("gold", 0),
+        dxy=s.get("dxy", 0),
+        vix=s.get("vix", 0),
+        hy_spread=s.get("hy_spread", 0),
+        ig_spread=s.get("ig_spread", 0),
+        tips_10y=s.get("tips_10y", 0),
+        breakeven_10y=s.get("breakeven_10y", 0),
+        cpi_yoy=energy.get("cpi_latest") or 0,
+        fed_score=sig.get("fed_score", 0),
+        curve_score=sig.get("curve_score", 0),
+        dxy_score=sig.get("dxy_score", 0),
+        energy_score=sig.get("energy_score", 0),
+        gold_score=sig.get("gold_score", 0),
+        total_score=current_total_score,
         prev_total_score=prev_total_score,
-        current_total_score=current_total_score,
-        score_delta=f"{'+' if score_delta >= 0 else ''}{score_delta}"
+        score_delta=f"{'+' if score_delta >= 0 else ''}{score_delta}",
+        cycle_state=cyc.get("state", "未知"),
+        cycle_confidence=cyc.get("confidence", 0),
+        news_summary="\n".join(f"  - {n}" for n in news_items) if news_items else "  （无近期新闻）",
     )
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=2000,
+        max_tokens=4000,
         temperature=0.3,
         system=SYSTEM_PROMPT_DEEP,
         messages=[{"role": "user", "content": user_prompt}]
@@ -135,13 +202,14 @@ def validate_deep_report(raw_output, payload):
     if hallucinated:
         logger.warning(f"[L3_DEEP] Hallucinated numbers: {hallucinated}")
 
-    # 质量检查
+    # 质量检查：CAUSAL_CHAIN 必须包含 "→" 符号
     if "→" not in sections.get("CAUSAL_CHAIN", ""):
         logger.warning("[L3_DEEP] CAUSAL_CHAIN missing causal arrow '→'")
-    if "港股" not in sections.get("POSITIONING", ""):
-        logger.warning("[L3_DEEP] POSITIONING missing '港股'")
+    # v3: POSITIONING 必须包含"美股"，不得包含"港股"
     if "美股" not in sections.get("POSITIONING", ""):
         logger.warning("[L3_DEEP] POSITIONING missing '美股'")
+    if "港股" in sections.get("POSITIONING", ""):
+        logger.warning("[L3_DEEP] POSITIONING contains '港股' which is forbidden in v3")
 
     return sections
 
@@ -271,7 +339,7 @@ def assemble_deep_report(payload, qualitative_context, llm_sections):
         "━━ 联储定性解读 ━━",
         llm_sections.get("FED_QUALITATIVE", "（暂不可用）"),
         "",
-        "━━ 港美股配置含义 ━━",
+        "━━ 美股配置含义 ━━",   # v3: 移除"港股"，专注美股
         llm_sections.get("POSITIONING", "（暂不可用）"),
         "",
         "━━ 下周关注 ━━",
@@ -294,24 +362,254 @@ def assemble_deep_report(payload, qualitative_context, llm_sections):
     return "\n".join(lines)
 
 
+def build_report_html(payload, message):
+    """将报告内容解析为带样式的 HTML（每节独立渲染）"""
+    week_num = get_week_number(payload["date"])
+    cycle_state = payload.get("cycle", {}).get("state", "不确定")
+    cycle_conf = payload.get("cycle", {}).get("confidence", 0)
+    sig = payload.get("signals", {})
+    total = sig.get("total_score", 0)
+
+    CYCLE_COLORS = {
+        "expansion": "#2E7D32", "overheating": "#C62828",
+        "stagflation": "#E65100", "recession": "#6A1B9A",
+        "recovery": "#1565C0", "uncertain": "#757575"
+    }
+    cycle_color = CYCLE_COLORS.get(cycle_state, "#757575")
+
+    SCORE_EMOJI = {2: "🟢", 1: "🟡", 0: "⚪", -1: "🟡", -2: "🔴"}
+    CYCLE_LABEL = {
+        "expansion": "扩张期", "overheating": "过热期",
+        "stagflation": "滞胀期", "recession": "衰退期",
+        "recovery": "复苏期", "uncertain": "不确定"
+    }
+
+    s = payload["snapshot"]
+    weekly = payload.get("weekly_change", {})
+
+    def fmt_delta(key):
+        v = weekly.get(f"{key}_7d_delta", 0)
+        if v is None:
+            return "N/A"
+        return f"{'+' if v >= 0 else ''}{v:.2f}"
+
+    # 解析 message 中的各节内容
+    import re
+    section_pattern = r'━━\s*(.+?)\s*━━\s*\n(.*?)(?=\n━━|\n_*\Z)'
+    matches = re.findall(section_pattern, message, re.DOTALL)
+
+    sections_html = ""
+    for heading, content in matches:
+        clean_content = content.strip()
+        # 转义但保留换行
+        clean_content = (clean_content
+                        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        .replace("\n", "<br>"))
+        sections_html += f"""
+  <div class="section">
+    <h2>{heading}</h2>
+    <p>{clean_content}</p>
+  </div>"""
+
+    # 信号评分行
+    sig_items = [
+        ("Fed", sig.get("fed_score", 0)),
+        ("Curve", sig.get("curve_score", 0)),
+        ("DXY", sig.get("dxy_score", 0)),
+        ("Energy", sig.get("energy_score", 0)),
+        ("Gold", sig.get("gold_score", 0)),
+    ]
+    sig_bars = "".join(
+        f'<span class="sig-item"><span class="sig-lbl">{lbl}</span><br>'
+        f'<span class="sig-val">{SCORE_EMOJI.get(s,"⚪")}</span></span>'
+        for lbl, s in sig_items
+    )
+
+    # 指标表格
+    indicators = [
+        ("10Y美债", f"{s.get('yield_10y', 0):.2f}%", fmt_delta("yield_10y")),
+        ("2Y美债", f"{s.get('yield_2y', 0):.2f}%", fmt_delta("yield_2y")),
+        ("2-10利差", f"{(payload['curve'].get('spread_2_10') or 0)*100:.0f}bp", fmt_delta("spread_2_10")),
+        ("DXY", f"{s.get('dxy', 0):.1f}", fmt_delta("dxy")),
+        ("WTI", f"${s.get('wti', 0):.1f}", fmt_delta("wti")),
+        ("黄金", f"${s.get('gold', 0):.0f}", fmt_delta("gold")),
+        ("VIX", f"{s.get('vix', 0):.1f}", fmt_delta("vix")),
+    ]
+    rows_html = "".join(
+        f'<tr><td class="ind-name">{name}</td><td class="ind-val">{val}</td><td class="ind-delta">{delta}bp</td></tr>'
+        for name, val, delta in indicators
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宏观周报 {payload['date']}</title>
+<style>
+  body {{
+    font-family: "Hiragino Sans GB", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    background: #f0f2f7;
+    margin: 0;
+    padding: 20px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #222;
+  }}
+  .container {{
+    max-width: 700px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.10);
+    overflow: hidden;
+  }}
+  .header {{
+    background: linear-gradient(135deg, #1a237e 0%, #283593 60%, #1565C0 100%);
+    color: #fff;
+    padding: 26px 32px 22px;
+  }}
+  .header h1 {{
+    margin: 0 0 5px;
+    font-size: 20px;
+    font-weight: 600;
+  }}
+  .header .meta {{
+    font-size: 12px;
+    opacity: 0.85;
+  }}
+  .cycle-badge {{
+    display: inline-block;
+    background: {cycle_color};
+    color: #fff;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 12px;
+    margin-top: 10px;
+    font-weight: 500;
+  }}
+  .scores-bar {{
+    background: #f8f9ff;
+    padding: 16px 32px;
+    border-bottom: 1px solid #e8eaf6;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }}
+  .sig-item {{
+    display: inline-block;
+    text-align: center;
+  }}
+  .sig-lbl {{
+    font-size: 11px;
+    color: #666;
+  }}
+  .sig-val {{
+    font-size: 20px;
+  }}
+  .total-score {{
+    margin-left: auto;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a237e;
+  }}
+  table.indicators {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }}
+  table.indicators th {{
+    background: #f5f6fa;
+    padding: 8px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 2px solid #e8eaf6;
+  }}
+  table.indicators td {{
+    padding: 7px 16px;
+    border-bottom: 1px solid #f0f0f5;
+  }}
+  .ind-name {{ color: #444; }}
+  .ind-val {{ text-align: right; font-variant-numeric: tabular-nums; }}
+  .ind-delta {{ text-align: right; color: #888; font-size: 12px; }}
+  .section {{
+    padding: 16px 32px;
+    border-bottom: 1px solid #eee;
+  }}
+  .section h2 {{
+    font-size: 13px;
+    font-weight: 700;
+    color: #1a237e;
+    margin: 0 0 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #c5cae9;
+    letter-spacing: 0.5px;
+  }}
+  .section p {{
+    margin: 0;
+    line-height: 1.75;
+    color: #333;
+    font-size: 13px;
+  }}
+  .footer {{
+    padding: 14px 32px;
+    background: #f0f2ff;
+    font-size: 10px;
+    color: #999;
+    text-align: center;
+  }}
+  @page {{
+    margin: 1.5cm;
+    size: A4;
+  }}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>📊 宏观周报 · 第{week_num}周</h1>
+    <div class="meta">{payload['date']}</div>
+    <div class="cycle-badge">{CYCLE_LABEL.get(cycle_state, '不确定')}（置信度 {cycle_conf}%）</div>
+  </div>
+
+  <div class="scores-bar">
+    {sig_bars}
+    <div class="total-score">综合 {total}/10</div>
+  </div>
+
+  <table class="indicators">
+    <tr>
+      <th>指标</th><th>当前值</th><th>周变化</th>
+    </tr>
+    {rows_html}
+  </table>
+
+  {sections_html}
+
+  <div class="footer">本报告由自动化系统生成，不构成投资建议</div>
+</div>
+</body>
+</html>"""
+    return html
+
+
 def send_deep_report(payload, llm_sections):
-    """发送深度报告到Telegram"""
+    """发送深度报告到Telegram（PDF格式）"""
     import telegram
     import asyncio
 
     qualitative_context = payload.get("qualitative_context", {})
     message = assemble_deep_report(payload, qualitative_context, llm_sections)
+    html_content = build_report_html(payload, message)
+    pdf_path = html_to_pdf(html_content)
 
     async def _send():
         bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
         chat_id = TELEGRAM_CHAT_ID
-        try:
-            await bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
-            logger.info("[L3_DEEP] Telegram deep report sent successfully")
-        except Exception as e:
-            logger.error(f"[L3_DEEP] Telegram send failed (Markdown): {e}")
-            plain = strip_markdown(message)
-            await bot.send_message(chat_id=chat_id, text=plain)
+        with open(pdf_path, "rb") as f:
+            await bot.send_document(chat_id=chat_id, document=f, filename=f"macro_report_{payload['date']}.pdf")
+        logger.info("[L3_DEEP] Telegram PDF report sent successfully")
 
     asyncio.run(_send())
 
@@ -322,6 +620,47 @@ def strip_markdown(text):
     text = re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', text)
     text = re.sub(r'`([^`]+)`', r'\1', text)
     return text
+
+
+class LLMOutputError(Exception):
+    pass
+
+
+def html_to_pdf(html_content, output_path=None):
+    """HTML → PDF（Playwright Chromium）"""
+    import tempfile
+    from pathlib import Path
+    from playwright.sync_api import sync_playwright
+
+    if output_path is None:
+        output_path = tempfile.mktemp(suffix=".pdf")
+
+    tmp_dir = Path(tempfile.gettempdir())
+    tmp_html = tmp_dir / "report.html"
+    tmp_html.write_text(html_content, encoding="utf-8")
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(f"file://{tmp_html.resolve()}")
+            page.wait_for_load_state("networkidle")
+
+            page.pdf(
+                path=output_path,
+                format="A4",
+                margin={"top": "1.5cm", "right": "1.5cm", "bottom": "1.5cm", "left": "1.5cm"},
+                print_background=True,
+                display_header_footer=True,
+                footer_template='<div style="font-size:9px;width:100%;text-align:center;color:#888;">'
+                                 '<span class="pageNumber"></span> / <span class="totalPages"></span>'
+                                 '</div>',
+            )
+            browser.close()
+    finally:
+        tmp_html.unlink(missing_ok=True)
+
+    return output_path
 
 
 class LLMOutputError(Exception):

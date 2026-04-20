@@ -103,8 +103,8 @@ def run_analysis(target_date_str):
 
     snapshot_for_cycle = {
         "vix": _v(data, "VIXCLS"),
-        "wti": _v(data, "DCOILWTICO"),
-        "hy_spread": _v(data, "BAMLH0A0HYM2"),
+        "wti": _v(data, "WTI"),  # v3: WTI (was DCOILWTICO)
+        "hy_spread": _v(data, "HY_SPREAD"),  # v3: HY_SPREAD
         "cpi_latest": energy_result.get("cpi_latest"),
     }
     cycle_state, cycle_confidence = compute_cycle_state(
@@ -129,12 +129,13 @@ def run_analysis(target_date_str):
         "yield_3mo":     _v(data, "DGS3MO"),
         "tips_10y":      _v(data, "DFII10"),
         "breakeven_10y": _v(data, "T10YIE"),
-        "dxy":           _v(data, "DTWEXBGS"),
-        "wti":           _v(data, "DCOILWTICO"),
+        # v3 命名：DXY（原 DTWEXBGS），WTI（原 DCOILWTICO）
+        "dxy":           _v(data, "DXY"),
+        "wti":           _v(data, "WTI"),
         "gold":          _v(data, "GOLD"),
         "vix":           _v(data, "VIXCLS"),
-        "ig_spread":     _v(data, "BAMLC0A0CM"),
-        "hy_spread":     _v(data, "BAMLH0A0HYM2"),
+        "ig_spread":     _v(data, "IG_SPREAD"),
+        "hy_spread":     _v(data, "HY_SPREAD"),
     }
 
     payload = {
@@ -171,8 +172,13 @@ def run_analysis(target_date_str):
             "energy_divergence_flag": energy_result["energy_divergence_flag"],
         },
         "dxy": {
-            "em_pressure_flag": dxy_result["em_pressure_flag"],
-            "20d_change_pct":   dxy_result["dxy_20d_change_pct"],
+            "em_pressure_flag":   dxy_result["em_pressure_flag"],
+            "20d_change_pct":     dxy_result["dxy_20d_change_pct"],
+            # v3 新增：CN 利差字段
+            "cn_us_10y_spread":   dxy_result.get("cn_us_10y_spread"),
+            "usdcny":             dxy_result.get("usdcny"),
+            "cny_pressure_flag":  dxy_result.get("cny_pressure_flag"),
+            "cn_data_available":  dxy_result.get("cn_data_available"),
         },
         "cycle": {
             "state":      cycle_state,
@@ -192,10 +198,11 @@ def compute_daily_change(target_date_str, data):
     snapshot_keys = ["yield_10y","yield_2y","yield_3mo","tips_10y","breakeven_10y",
                      "dxy","wti","gold","vix","ig_spread","hy_spread"]
     id_map = {
+        # v3 命名：DXY, WTI；IG_SPREAD, HY_SPREAD
         "yield_10y":"DGS10","yield_2y":"DGS2","yield_3mo":"DGS3MO",
-        "tips_10y":"DFII10","breakeven_10y":"T10YIE","dxy":"DTWEXBGS",
-        "wti":"DCOILWTICO","gold":"GOLD","vix":"VIXCLS",
-        "ig_spread":"BAMLC0A0CM","hy_spread":"BAMLH0A0HYM2"
+        "tips_10y":"DFII10","breakeven_10y":"T10YIE","dxy":"DXY",
+        "wti":"WTI","gold":"GOLD","vix":"VIXCLS",
+        "ig_spread":"IG_SPREAD","hy_spread":"HY_SPREAD"
     }
     dc = {}
     for sk in snapshot_keys:
@@ -220,9 +227,9 @@ def aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data, target_da
         flags.append("em_pressure")
 
     gold_5d_ago = db.get_latest_indicator_before("GOLD", target_date_str, limit=1)
-    dxy_5d_ago  = db.get_latest_indicator_before("DTWEXBGS", target_date_str, limit=1)
+    dxy_5d_ago  = db.get_latest_indicator_before("DXY", target_date_str, limit=1)  # v3: DXY (was DTWEXBGS)
     gold_today  = _v(data, "GOLD")
-    dxy_today   = _v(data, "DTWEXBGS")
+    dxy_today   = _v(data, "DXY")  # v3: DXY (was DTWEXBGS)
 
     if gold_5d_ago and dxy_5d_ago and gold_today and dxy_today:
         gold_5d_ret = (gold_today - gold_5d_ago[0]["value"]) / gold_5d_ago[0]["value"]
@@ -230,7 +237,7 @@ def aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data, target_da
         if gold_5d_ret > 0.02 and dxy_5d_ret > 0.01:
             flags.append("gold_dxy_simultaneous_rise")
 
-    hy_vix_corr = rolling_correlation("BAMLH0A0HYM2", "VIXCLS", window=30)
+    hy_vix_corr = rolling_correlation("HY_SPREAD", "VIXCLS", window=30)  # v3: HY_SPREAD (was BAMLH0A0HYM2)
     if hy_vix_corr < 0.3:
         flags.append("credit_vix_divergence")
     return flags

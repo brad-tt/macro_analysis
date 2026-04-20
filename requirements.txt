@@ -1,7 +1,12 @@
-fredapi
+# v3 依赖：OpenBB ODP 主接口 + akshare（仅 CN 数据）
+openbb>=4.4.0,<5.0.0
+openbb-fred
+openbb-yfinance
+openbb-imf
+openbb-econdb
 akshare
+fredapi
 yfinance
-openbb
 nelson_siegel_svensson
 statsmodels
 pandas

@@ -1,14 +1,14 @@
-"""L2.4 能源模块"""
+"""L2.4 能源模块 — v3 更新：WTI 而非 DCOILWTICO"""
 from datetime import date, timedelta
 import db
 from analysis.utils import _v, query_db_n_days_ago
 
 def compute_energy(data):
-    wti = _v(data, "DCOILWTICO")
-    cpi_val = _v(data, "CPIAUCSL")  # CPI 指数值
+    wti = _v(data, "WTI")  # v3: WTI (was DCOILWTICO)
+    cpi_val = _v(data, "CPIAUCSL")
     vix = _v(data, "VIXCLS")
 
-    wti_20d_ago = query_db_n_days_ago("DCOILWTICO", 20)
+    wti_20d_ago = query_db_n_days_ago("WTI", 20)  # v3
     wti_20d_delta = (wti - wti_20d_ago) if (wti is not None and wti_20d_ago is not None) else 0.0
 
     # CPI 同比计算（需12个月前数据）
@@ -52,32 +52,53 @@ def compute_energy(data):
     }
 
 def query_latest_pmi():
-    """从 FRED 获取最新 ISM 制造业 PMI (MANUM)"""
+    """
+    从 ism_pmi qualitative 数据源获取最新 PMI（爬取自 tradingeconomics.com）。
+    FRED 的 MANUM 已于 2020-07 停止更新，不再使用。
+    """
+    import db as _db
+    from datetime import date, timedelta
     try:
-        from fredapi import Fred
+        # 尝试从本地 qualitative 数据源获取（近7日内）
+        pmi_data = _db.get_latest_qualitative("ism_pmi", last_n_days=7)
+        if pmi_data and len(pmi_data) > 0:
+            latest = pmi_data[0]
+            val = latest.get("value")
+            if val is not None:
+                return round(float(val), 1)
+    except Exception:
+        pass
+
+    # Fallback: 仍尝试 OpenBB/FRED（返回 None 也不影响主流程）
+    try:
         from config.settings import FRED_API_KEY
+        from openbb import obb
         if not FRED_API_KEY:
             return None
-        fred = Fred(api_key=FRED_API_KEY)
-        series = fred.get_series("MANUM", observation_start=(date.today() - timedelta(days=60)).isoformat())
-        series = series.dropna()
-        if not series.empty:
-            return round(float(series.iloc[-1]), 1)
+        obb.user.credentials.fred_api_key = FRED_API_KEY
+        result = obb.economy.fred_series(symbol="MANUM", provider="fred",
+                                        start_date=(date.today() - timedelta(days=60)).isoformat())
+        df = result.to_df()
+        if not df.empty:
+            val = df["MANUM"].dropna().iloc[-1]
+            return round(float(val), 1)
     except Exception:
         pass
     return None
 
 def get_etf_return(ticker, days):
     """获取ETF从N天前到今天的收益率（%）"""
-    import yfinance as yf
+    from openbb import obb
     from datetime import timedelta
     end = date.today()
     start = end - timedelta(days=days + 5)
     try:
-        hist = yf.Ticker(ticker).history(start=start, end=end + timedelta(days=1))
-        if hist.empty or len(hist) < 2:
+        result = obb.equity.price.historical(symbol=ticker, provider="yfinance",
+                                             start_date=start.isoformat(), end_date=(end + timedelta(days=1)).isoformat())
+        df = result.to_df()
+        if df.empty or len(df) < 2:
             return 0.0
-        prices = hist["Close"].dropna()
+        prices = df["close"].dropna()
         if len(prices) < 2:
             return 0.0
         return (prices.iloc[-1] - prices.iloc[0]) / prices.iloc[0] * 100

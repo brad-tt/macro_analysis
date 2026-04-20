@@ -1,4 +1,4 @@
-"""L2.2 联储政策模块"""
+"""L2.2 联储政策模块 — v3 更新：DXY 而非 DTWEXBGS"""
 import db
 from analysis.utils import _v, query_db_n_days_ago, rolling_correlation
 
@@ -12,7 +12,8 @@ def compute_fed_policy(data):
         if prev_tips is not None:
             tips_5d_delta = tips_10y - prev_tips
 
-    dxy_realrate_corr = rolling_correlation("DTWEXBGS", "DFII10", window=30)
+    # v3: DXY 而非 DTWEXBGS
+    dxy_realrate_corr = rolling_correlation("DXY", "DFII10", window=30)
 
     if tips_5d_delta is None:
         fed_score = 0
