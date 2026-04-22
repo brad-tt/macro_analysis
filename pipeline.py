@@ -5,9 +5,12 @@
   --mode weekly   : 每周深度报告 L1+L2+L3_DEEP
   --mode alert    : 事件触发检查，满足条件则L3_ALERT
 """
+import os
 import sys
 import logging
 from datetime import date, timedelta
+
+os.makedirs("./logs", exist_ok=True)
 
 from config.settings import LOG_LEVEL
 import db
