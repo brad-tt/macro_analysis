@@ -47,9 +47,15 @@ def _is_stale_computed(fetched_date, target_date):
     # fetched_date < target_date
     today = date.today()
     if target_date == today and today.weekday() == 0:
-        # 周一：允许最近4个日历天内的数据（周一至周四，周四可能因假日休市）
-        # 实际场景：4/17周四(Good Friday)休市，数据最近到4/16周三
+        # 周一早间：允许最近4个日历天内的数据（周末+假日休市）
         for days_back in [1, 2, 3, 4]:
+            last_trading = today - timedelta(days=days_back)
+            if fetched_date >= last_trading:
+                return 0
+    if target_date == today and today.weekday() in (1, 2, 3):
+        # 周二/三/四： Easter Monday 等假期后首个工作日
+        # 允许最近5个日历天内的数据（周一假期 + 周末）
+        for days_back in [1, 2, 3, 4, 5]:
             last_trading = today - timedelta(days=days_back)
             if fetched_date >= last_trading:
                 return 0
