@@ -54,7 +54,7 @@ CYCLE_RULES = [
     },
 ]
 
-def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, snapshot):
+def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, snapshot, base_date=None):
     pmi = query_latest_pmi()
     hy_spread = snapshot.get("hy_spread")
     vix = snapshot.get("vix")
@@ -67,18 +67,16 @@ def compute_cycle_state(curve_result, fed_result, energy_result, dxy_result, sna
     inversion_days = curve_result["inversion_days"]
 
     # v3: HY_SPREAD（不再是 BAMLH0A0HYM2）
-    hy_spread_20d_ago = query_db_n_days_ago("HY_SPREAD", 20)
+    hy_spread_20d_ago = query_db_n_days_ago("HY_SPREAD", 20, base_date=base_date)
     hy_spread_delta_20d = hy_spread - hy_spread_20d_ago if (hy_spread and hy_spread_20d_ago) else None
 
-    spread_2_10_60d_ago = query_db_n_days_ago("DGS10", 60)
-    spread_2_10_2y_ago  = query_db_n_days_ago("DGS2", 60)
-    spread_2_10_delta_60d = (
-        (spread_2_10 - (spread_2_10_60d_ago - (query_db_n_days_ago("DGS2", 60) or spread_2_10_2y_ago or spread_2_10)))
-        if spread_2_10_60d_ago else None
-    )
+    dgs10_60d_ago = query_db_n_days_ago("DGS10", 60, base_date=base_date)
+    dgs2_60d_ago  = query_db_n_days_ago("DGS2",  60, base_date=base_date)
+    spread_60d_ago = (dgs10_60d_ago - dgs2_60d_ago) if (dgs10_60d_ago is not None and dgs2_60d_ago is not None) else None
+    spread_2_10_delta_60d = round(spread_2_10 - spread_60d_ago, 4) if (spread_2_10 is not None and spread_60d_ago is not None) else None
 
     # PMI 20天变化：使用ISM制造业PMI (MANUM)，不再用SPX代替
-    pmi_20d_ago = query_db_n_days_ago("MANUM", 20)
+    pmi_20d_ago = query_db_n_days_ago("MANUM", 20, base_date=base_date)
     pmi_delta_20d = (pmi - pmi_20d_ago) if (pmi and pmi_20d_ago) else None
 
     context = {

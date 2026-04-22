@@ -269,10 +269,34 @@ def extract_all_numbers_from_payload(payload):
     return numbers
 
 
-def approximately_exists(num, payload_numbers, tolerance=1.0):
+def approximately_exists(num, payload_numbers):
+    """
+    按数值量级自动选择容差，避免固定容差导致的误判。
+    容差规则（覆盖宏观指标的典型量级）：
+      < 10    → 收益率/利差/百分比类，容差 0.05
+      10~200  → 指数/汇率类（DXY/VIX/EURUSD），容差 0.5
+      200~500 → 中等价格（无此类指标，预留），容差 2.0
+      > 500   → 大价格（黄金/SPX），容差 5.0
+    """
+    num = float(num)
+    abs_num = abs(num)
+
+    if abs_num < 10:
+        tolerance = 0.05
+    elif abs_num < 200:
+        tolerance = 0.5
+    elif abs_num < 500:
+        tolerance = 2.0
+    else:
+        tolerance = 5.0
+
     for pn in payload_numbers:
-        if pn and abs(float(num) - float(pn)) < tolerance:
-            return True
+        if pn is not None:
+            try:
+                if abs(num - float(pn)) < tolerance:
+                    return True
+            except (TypeError, ValueError):
+                continue
     return False
 
 

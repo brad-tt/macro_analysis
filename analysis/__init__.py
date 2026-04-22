@@ -110,7 +110,8 @@ def run_analysis(target_date_str):
         "cpi_latest": energy_result.get("cpi_latest"),
     }
     cycle_state, cycle_confidence = compute_cycle_state(
-        curve_result, fed_result, energy_result, dxy_result, snapshot_for_cycle
+        curve_result, fed_result, energy_result, dxy_result, snapshot_for_cycle,
+        base_date=target_date_str
     )
 
     total_score = (
