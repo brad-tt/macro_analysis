@@ -1,0 +1,82 @@
+name: Macro Pipeline Scheduler
+
+on:
+  schedule:
+    # ── 每周一 06:00 北京时间 ─────────────────────────────
+    # 北京周一 06:00 = UTC 周日 22:00
+    - cron: '0 22 * * 0'
+    # ── 周一~五 05:30 北京时间（daily silent）──────────────
+    # 北京周二~六 05:30 = UTC 前一天 21:30 = weekday 1~5
+    - cron: '30 21 * * 1-5'
+    # ── 周一~五 06:05 北京时间（alert check）──────────────
+    # 北京周一~五 06:05 = UTC 前一天 22:05
+    - cron: '5 22 * * 1-5'
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '运行模式'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+          - daily
+          - weekly
+          - alert
+
+env:
+  FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  DB_PATH: ./data/macro_data.db
+  TZ: Asia/Shanghai
+
+jobs:
+  macro-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Restore SQLite database cache
+        uses: actions/cache@v4
+        with:
+          path: ./data/
+          key: macro-db-${{ runner.os }}
+          restore-keys: |
+            macro-db-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt --quiet
+
+      - name: Determine pipeline mode
+        id: mode
+        run: |
+          if [ "${{ inputs.mode }}" != "" ]; then
+            echo "MODE=${{ inputs.mode }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 22 * * 0" ]; then
+            echo "MODE=weekly" >> $GITHUB_OUTPUT
+          else
+            # daily silent (weekday 05:30) + alert check (weekday 06:05) 都跑 daily
+            # pipeline.py 内部判断是否触发 alert
+            echo "MODE=daily" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run macro pipeline
+        run: python3 pipeline.py ${{ steps.mode.outputs.MODE }}
+
+      # 保存 DB 以便下次 run 恢复（即使失败也保存，避免数据丢失）
+      - name: Save database cache
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: ./data/
+          key: macro-db-${{ runner.os }}
