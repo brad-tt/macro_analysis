@@ -35,12 +35,12 @@ FED_THRESHOLDS = {
     "anomaly_yield_policy_inversion_tips": 0.10,
 }
 
-DXY_THRESHOLDS = {
-    # DXY → score
-    "dxy_strong":               108,    # DXY > 108 → score -2（强美元压制）
-    "dxy_moderate_high":       104,    # DXY > 104 → score -1
-    "dxy_moderate_low":        101,    # DXY < 101 → score +1
-    "dxy_weak":                97,     # DXY < 97 → score +2（弱美元宽松）
+DTWEX_THRESHOLDS = {
+    # DTWEXBGS → score（广义贸易加权美元指数）
+    "dxy_strong":               108,    # DTWEXBGS > 108 → score -2（强美元压制）
+    "dxy_moderate_high":       104,    # DTWEXBGS > 104 → score -1
+    "dxy_moderate_low":        101,    # DTWEXBGS < 101 → score +1
+    "dxy_weak":                97,     # DTWEXBGS < 97 → score +2（弱美元宽松）
     # EM 压力触发
     "em_pressure_dxy":          105,    # DXY > 105 + trend > 2% → EM压力
     "em_pressure_trend":        2.0,    # DXY 20日变化 > 2%

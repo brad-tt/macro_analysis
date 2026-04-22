@@ -1,15 +1,15 @@
-"""L2.5 黄金模块 — v3 更新：DXY 而非 DTWEXBGS"""
+"""L2.5 黄金模块 — DTWEXBGS 广义贸易加权指数"""
 from analysis.utils import _v, query_db_n_days_ago, rolling_correlation
 from config.thresholds import GOLD_THRESHOLDS as GT
 
 def compute_gold(data, base_date=None):
     gold = _v(data, "GOLD")
     tips = _v(data, "DFII10")
-    dxy  = _v(data, "DXY")
+    dtwex  = _v(data, "DTWEXBGS")
     vix  = _v(data, "VIXCLS")
 
     gold_realrate_corr = rolling_correlation("GOLD", "DFII10", window=30)
-    gold_dxy_corr      = rolling_correlation("GOLD", "DXY", window=30)
+    gold_dxy_corr      = rolling_correlation("GOLD", "DTWEXBGS", window=30)
 
     anomaly_gold_realrate_decorrelation = gold_realrate_corr > GT["realrate_corr_anomaly"]
 

@@ -62,7 +62,7 @@ USER_PROMPT_TEMPLATE_DEEP = """报告日期：{date}
 【核心数据 - 严格按原文引用，不许改写单位或近似值】
 
   美债收益率: 10Y={yield_10y:.2f}%  2Y={yield_2y:.2f}%  3M={yield_3mo:.3f}%  2-10spread={spread_2_10:.4f}
-  WTI原油: {wti:.2f}  黄金: {gold:.0f}  DXY: {dxy:.1f}  VIX: {vix:.1f}
+  WTI原油: {wti:.2f}  黄金: {gold:.0f}  DTWEXBGS: {dxy:.1f}  VIX: {vix:.1f}
   信用利差: HY={hy_spread:.2f}%  IG={ig_spread:.2f}%
   TIPS实际利率={tips_10y:.2f}%  盈亏平衡通胀={breakeven_10y:.2f}%  CPI={cpi_yoy:.1f}%
 
@@ -341,7 +341,7 @@ def assemble_deep_report(payload, qualitative_context, llm_sections):
         f"{'10Y美债':<10} {s.get('yield_10y', 0):.2f}%  {fmt_week_delta('yield_10y')}bp",
         f"{'2Y美债':<10} {s.get('yield_2y', 0):.2f}%  {fmt_week_delta('yield_2y')}bp",
         f"{'2-10利差':<10} {(payload['curve'].get('spread_2_10') or 0)*100:.0f}bp  {fmt_week_delta('spread_2_10')}bp",
-        f"{'DXY':<10} {s.get('dxy', 0):.1f}  {fmt_week_delta('dxy')}",
+        f"{'DTWEXBGS':<10} {s.get('dxy', 0):.1f}  {fmt_week_delta('dxy')}",
         f"{'WTI':<10} ${s.get('wti', 0):.1f}  {fmt_week_delta('wti')}",
         f"{'黄金':<10} ${s.get('gold', 0):.0f}  {fmt_week_delta('gold')}",
         f"{'VIX':<10} {s.get('vix', 0):.1f}  {fmt_week_delta('vix')}",
@@ -374,7 +374,7 @@ def assemble_deep_report(payload, qualitative_context, llm_sections):
         anomaly_explanations = {
             "yield_policy_inversion":          "⚠️ 降息信号下长端利率不降反升，市场不信任联储路径",
             "gold_realrate_decorrelation":      "⚠️ 黄金与实际利率相关性转正，央行购金或避险需求主导",
-            "em_pressure":                      "⚠️ 强美元+DXY>105，新兴市场资金外流风险上升",
+            "em_pressure":                      "⚠️ 强美元+DTWEXBGS>105，新兴市场资金外流风险上升",
             "gold_dxy_simultaneous_rise":       "⚠️ 金价与美元同涨，信用体系压力信号",
             "credit_vix_divergence":            "⚠️ 信用利差与VIX背离，风险定价内部分裂"
         }
@@ -439,7 +439,7 @@ def build_report_html(payload, message):
     sig_items = [
         ("Fed", sig.get("fed_score", 0)),
         ("Curve", sig.get("curve_score", 0)),
-        ("DXY", sig.get("dxy_score", 0)),
+        ("DTWEXBGS", sig.get("dxy_score", 0)),
         ("Energy", sig.get("energy_score", 0)),
         ("Gold", sig.get("gold_score", 0)),
     ]
@@ -454,7 +454,7 @@ def build_report_html(payload, message):
         ("10Y美债", f"{s.get('yield_10y', 0):.2f}%", fmt_delta("yield_10y")),
         ("2Y美债", f"{s.get('yield_2y', 0):.2f}%", fmt_delta("yield_2y")),
         ("2-10利差", f"{(payload['curve'].get('spread_2_10') or 0)*100:.0f}bp", fmt_delta("spread_2_10")),
-        ("DXY", f"{s.get('dxy', 0):.1f}", fmt_delta("dxy")),
+        ("DTWEXBGS", f"{s.get('dxy', 0):.1f}", fmt_delta("dxy")),
         ("WTI", f"${s.get('wti', 0):.1f}", fmt_delta("wti")),
         ("黄金", f"${s.get('gold', 0):.0f}", fmt_delta("gold")),
         ("VIX", f"{s.get('vix', 0):.1f}", fmt_delta("vix")),

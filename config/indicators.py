@@ -25,8 +25,10 @@ INDICATORS_MANIFEST = [
     {"id": "VIXCLS",  "name": "VIX恐慌指数",          "source": "openbb", "priority": "P0",
      "unit": "index",    "valid_range": [5, 100],
      "openbb_call": "obb.economy.fred_series(symbol='VIXCLS', provider='fred')"},
-    # DXY: yfinance ticker DX-Y.NYB 已失效，改用 FRED DTWEXBGS
-    {"id": "DXY",     "name": "美元指数（广义）",     "source": "openbb", "priority": "P0",
+    # DTWEXBGS: 广义贸易加权美元指数（Broad Trade Weighted USD Index）
+    # 衡量美元相对于全球主要贸易伙伴货币的综合购买力
+    # 覆盖数十个国家（包含EM），比6币种的现货DXY更反映全球金融环境
+    {"id": "DTWEXBGS", "name": "广义贸易加权美元指数", "source": "openbb", "priority": "P0",
      "unit": "index",    "valid_range": [70, 130],
      "openbb_call": "obb.economy.fred_series(symbol='DTWEXBGS', provider='fred')"},
     {"id": "WTI",     "name": "WTI原油现货价",        "source": "openbb", "priority": "P0",

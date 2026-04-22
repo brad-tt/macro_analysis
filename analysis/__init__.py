@@ -132,8 +132,8 @@ def run_analysis(target_date_str):
         "yield_3mo":     _v(data, "DGS3MO"),
         "tips_10y":      _v(data, "DFII10"),
         "breakeven_10y": _v(data, "T10YIE"),
-        # v3 命名：DXY（原 DTWEXBGS），WTI（原 DCOILWTICO）
-        "dxy":           _v(data, "DXY"),
+        # DTWEXBGS: 广义贸易加权美元指数
+        "dxy":           _v(data, "DTWEXBGS"),
         "wti":           _v(data, "WTI"),
         "gold":          _v(data, "GOLD"),
         "vix":           _v(data, "VIXCLS"),
@@ -201,9 +201,9 @@ def compute_daily_change(target_date_str, data):
     snapshot_keys = ["yield_10y","yield_2y","yield_3mo","tips_10y","breakeven_10y",
                      "dxy","wti","gold","vix","ig_spread","hy_spread"]
     id_map = {
-        # v3 命名：DXY, WTI；IG_SPREAD, HY_SPREAD
+        # DTWEXBGS, WTI；IG_SPREAD, HY_SPREAD
         "yield_10y":"DGS10","yield_2y":"DGS2","yield_3mo":"DGS3MO",
-        "tips_10y":"DFII10","breakeven_10y":"T10YIE","dxy":"DXY",
+        "tips_10y":"DFII10","breakeven_10y":"T10YIE","dxy":"DTWEXBGS",
         "wti":"WTI","gold":"GOLD","vix":"VIXCLS",
         "ig_spread":"IG_SPREAD","hy_spread":"HY_SPREAD"
     }
@@ -230,9 +230,9 @@ def aggregate_anomaly_flags(fed_result, gold_result, dxy_result, data, target_da
         flags.append("em_pressure")
 
     gold_5d_ago = db.get_latest_indicator_before("GOLD", target_date_str, limit=1)
-    dxy_5d_ago  = db.get_latest_indicator_before("DXY", target_date_str, limit=1)  # v3: DXY (was DTWEXBGS)
+    dxy_5d_ago  = db.get_latest_indicator_before("DTWEXBGS", target_date_str, limit=1)
     gold_today  = _v(data, "GOLD")
-    dxy_today   = _v(data, "DXY")  # v3: DXY (was DTWEXBGS)
+    dxy_today   = _v(data, "DTWEXBGS")
 
     if gold_5d_ago and dxy_5d_ago and gold_today and dxy_today:
         gold_5d_ret = (gold_today - gold_5d_ago[0]["value"]) / gold_5d_ago[0]["value"]
