@@ -31,9 +31,9 @@ INDICATORS_MANIFEST = [
     {"id": "DTWEXBGS", "name": "广义贸易加权美元指数", "source": "openbb", "priority": "P0",
      "unit": "index",    "valid_range": [70, 130],
      "openbb_call": "obb.economy.fred_series(symbol='DTWEXBGS', provider='fred')"},
-    {"id": "WTI",     "name": "WTI原油现货价",        "source": "openbb", "priority": "P0",
-     "unit": "usd_per_barrel", "valid_range": [10, 200],
-     "openbb_call": "obb.economy.fred_series(symbol='DCOILWTICO', provider='fred')"},
+    {"id": "WTI",     "name": "WTI原油（yfinance CL=F）", "source": "yfinance", "priority": "P0",
+     "unit": "usd_per_barrel", "valid_range": [60, 120],
+     "openbb_call": "obb.equity.price.historical(symbol='CL', provider='yfinance', start_date=(target_date - timedelta(days=5)).isoformat(), end_date=(target_date + timedelta(days=1)).isoformat())"},
     # GOLD: FRED 系列失效，改用 yfinance 黄金期货 GC=F
     {"id": "GOLD",    "name": "伦敦金现货",           "source": "openbb", "priority": "P0",
      "unit": "usd_per_troy_oz", "valid_range": [500, 5000],

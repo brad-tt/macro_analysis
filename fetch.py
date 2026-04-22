@@ -266,6 +266,40 @@ def fetch_akshare_cn_indicators():
     return results
 
 
+def fetch_wti(target_date_str):
+    """
+    WTI 原油价格（yfinance CL=F 主合约）
+    直接用 yfinance 避免 OpenBB 数据时区/合约问题
+    """
+    import yfinance as yf
+    results = {}
+    try:
+        ticker = yf.Ticker("CL=F")
+        # 取最近5天，取最后一个有收盘价的日期
+        hist = ticker.history(period="5d")
+        if hist.empty:
+            logger.warning("[L1] WTI: no data from yfinance CL=F")
+            return {}
+        close_prices = hist["Close"].dropna()
+        if close_prices.empty:
+            return {}
+        wti_price = round(float(close_prices.iloc[-1]), 2)
+        fetched_date = close_prices.index[-1].date().isoformat()
+        if 60 <= wti_price <= 120:
+            results["WTI"] = {
+                "value": wti_price,
+                "source": "yfinance",
+                "is_stale": 0,
+                "fetched_date": fetched_date
+            }
+            logger.info(f"[L1] WTI={wti_price} (fetched {fetched_date})")
+        else:
+            logger.warning(f"[L1] WTI={wti_price} out of range [60,120]")
+    except Exception as e:
+        logger.warning(f"[L1] WTI fetch failed: {e}")
+    return results
+
+
 def fetch_all_indicators(target_date_str):
     """L1主函数：抓取所有指标"""
     target_date = date.fromisoformat(target_date_str)
@@ -304,7 +338,7 @@ def fetch_all_indicators(target_date_str):
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     openbb_indicators = [i for i in INDICATORS_MANIFEST
-                         if i["source"] == "openbb" and i["id"] not in treasury_ids]
+                         if i["source"] == "openbb" and i["id"] not in treasury_ids and i["id"] != "WTI"]
 
     # 并发获取数据（不触碰 DB），收集结果到列表
     fetched_results = []
@@ -351,6 +385,17 @@ def fetch_all_indicators(target_date_str):
     for cid in ["USDCNY", "CN10Y"]:
         if cid not in results or results[cid] is None:
             logger.warning(f"[L1] {cid} unavailable")
+
+    # ── 第四批：yfinance 专属 WTI（绕过 OpenBB/FRED 数据误差）──
+    wti_results = fetch_wti(target_date_str)
+    for wid, wdata in wti_results.items():
+        results[wid] = wdata
+        db.upsert_indicator(
+            date=target_date_str, series_id=wid,
+            value=wdata["value"], source="yfinance", is_stale=0
+        )
+    if not wti_results:
+        logger.warning("[L1] WTI unavailable")
 
     # P0 中止条件
     if len(missing_p0) >= 4:
