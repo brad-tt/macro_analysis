@@ -1,7 +1,7 @@
 """L2.4 能源模块 — v3 更新：WTI 而非 DCOILWTICO"""
 from datetime import date, timedelta
 import db
-from analysis.utils import _v, query_db_n_days_ago
+from analysis.utils import _v, query_db_n_days_ago, query_latest_pmi
 from config.thresholds import ENERGY_THRESHOLDS as ET
 
 def compute_energy(data, base_date=None):
@@ -69,39 +69,6 @@ def compute_energy(data, base_date=None):
         "energy_divergence_flag": energy_divergence,
         "energy_score":           energy_score
     }
-
-def query_latest_pmi():
-    """
-    从 ism_pmi qualitative 数据源获取最新 PMI（爬取自 tradingeconomics.com）。
-    FRED 的 MANUM 已于 2020-07 停止更新，不再使用。
-    """
-    import db as _db
-    from datetime import date, timedelta
-    try:
-        pmi_data = _db.get_latest_qualitative("ism_pmi", last_n_days=7)
-        if pmi_data and len(pmi_data) > 0:
-            latest = pmi_data[0]
-            val = latest.get("value")
-            if val is not None:
-                return round(float(val), 1)
-    except Exception:
-        pass
-
-    try:
-        from config.settings import FRED_API_KEY
-        from openbb import obb
-        if not FRED_API_KEY:
-            return None
-        obb.user.credentials.fred_api_key = FRED_API_KEY
-        result = obb.economy.fred_series(symbol="MANUM", provider="fred",
-                                        start_date=(date.today() - timedelta(days=60)).isoformat())
-        df = result.to_df()
-        if not df.empty:
-            val = df["MANUM"].dropna().iloc[-1]
-            return round(float(val), 1)
-    except Exception:
-        pass
-    return None
 
 def get_etf_return(ticker, days):
     """获取ETF从N天前到今天的收益率（%）"""

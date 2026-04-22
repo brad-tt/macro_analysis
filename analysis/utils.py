@@ -70,3 +70,31 @@ def rolling_correlation(series_a, series_b, window=30):
         return 0.0
     corr = np.corrcoef(a_vals[-min_len:], b_vals[-min_len:])[0, 1]
     return float(corr) if not np.isnan(corr) else 0.0
+
+
+def query_latest_pmi(base_date=None):
+    """
+    获取最新 ISM 制造业 PMI，三级降级链：
+      Level 1: tradingeconomics.com 爬取（by fetch_qualitative）
+      Level 2: ISM 官网直接爬取（by fetch_qualitative）
+      Level 3: FRED MANUM 历史值（stale，by fetch_qualitative）
+    本函数从 qualitative_context 表读取已采集的 PMI 数据。
+    base_date: 查询基准日期，默认今天（暂未使用，保留接口）
+    """
+    import logging
+    try:
+        pmi_data = db.get_latest_qualitative("ism_pmi", last_n_days=7)
+        if pmi_data:
+            latest = pmi_data[0] if isinstance(pmi_data[0], dict) else None
+            if latest:
+                val = latest.get("value")
+                is_stale = latest.get("is_stale", False)
+                if val is not None:
+                    if is_stale:
+                        logging.getLogger(__name__).warning(
+                            f"[PMI] Stale PMI={val} (source={latest.get('source','unknown')})"
+                        )
+                    return round(float(val), 1)
+    except Exception:
+        pass
+    return None

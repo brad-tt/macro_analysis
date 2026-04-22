@@ -415,7 +415,61 @@ def fetch_ism_pmi(target_date_str=None):
                             "year": date.today().year,
                         }
     except Exception as e:
-        logger.warning(f"[L1-Qual] ism_pmi failed: {e}")
+        logger.warning(f"[L1-Qual] ism_pmi Level1 (tradingeconomics) failed: {e}")
+
+    # Level 2 fallback: ISM 官网直接爬取
+    try:
+        resp = requests.get(
+            "https://www.ismworld.org/supply-management-news-and-reports/reports/ism-report-on-business/pmi/",
+            headers=HEADERS, timeout=15
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        text = soup.get_text()
+        match = re.search(r'Manufacturing PMI[®\s]*at\s+(\d+\.\d+)', text)
+        if match:
+            val = float(match.group(1))
+            if 30 <= val <= 70:
+                logger.info(f"[L1-Qual] ism_pmi Level2 (ISM官网): {val}")
+                return {
+                    "value": val,
+                    "previous": None,
+                    "month": date.today().strftime("%b"),
+                    "year": date.today().year,
+                    "source": "ism_official"
+                }
+    except Exception as e:
+        logger.warning(f"[L1-Qual] ism_pmi Level2 (ISM官网) failed: {e}")
+
+    # Level 3 fallback: FRED MANUM（已停更，但有历史值）
+    try:
+        from openbb import obb
+        from config.settings import FRED_API_KEY
+        if FRED_API_KEY:
+            obb.user.credentials.fred_api_key = FRED_API_KEY
+            result = obb.economy.fred_series(
+                symbol="MANUM", provider="fred",
+                start_date="2019-01-01"
+            )
+            df = result.to_df()
+            if not df.empty:
+                last_val = df["MANUM"].dropna().iloc[-1]
+                last_date = df.dropna().index[-1]
+                val = round(float(last_val), 1)
+                if 30 <= val <= 70:
+                    logger.warning(
+                        f"[L1-Qual] ism_pmi Level3 (FRED MANUM, stale since {last_date.date()}): {val}"
+                    )
+                    return {
+                        "value": val,
+                        "previous": None,
+                        "month": last_date.strftime("%b"),
+                        "year": last_date.year,
+                        "source": "fred_manum_stale",
+                        "is_stale": True
+                    }
+    except Exception as e:
+        logger.warning(f"[L1-Qual] ism_pmi Level3 (FRED MANUM) failed: {e}")
 
     return None
 
