@@ -262,12 +262,16 @@ def check_hallucinated_numbers(sections, payload):
 def sanitize_numeric_labels(text):
     """移除宏观金融里常见的术语数字，避免把行业标签误判成幻觉。"""
     patterns = [
-        r"\b10Y\b",
-        r"\b2Y\b",
-        r"\b3M\b",
+        r"10Y",
+        r"2Y",
+        r"3M",
         r"10年期",
+        r"10年",
         r"2年期",
+        r"2年",
         r"3个月",
+        r"3月",
+        r"10年期",
         r"2-10(?:利差|spread)?",
         r"S&P\s*500",
         r"标普\s*500",
