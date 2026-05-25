@@ -204,6 +204,7 @@ def validate_deep_report(raw_output, payload):
     hallucinated = check_hallucinated_numbers(sections, payload)
     if hallucinated:
         logger.warning(f"[L3_DEEP] Hallucinated numbers: {hallucinated}")
+        raise LLMOutputError(f"hallucinated numbers detected: {', '.join(sorted(set(hallucinated)))}")
 
     # 质量检查：CAUSAL_CHAIN 必须包含 "→" 符号
     if "→" not in sections.get("CAUSAL_CHAIN", ""):
@@ -326,11 +327,11 @@ def assemble_deep_report(payload, qualitative_context, llm_sections):
         "recovery": "复苏期", "uncertain": "不确定"
     }
 
-    def fmt_week_delta(key):
+    def fmt_week_delta(key, scale=1.0, suffix=""):
         v = payload.get("weekly_change", {}).get(f"{key}_7d_delta", 0)
         if v is None:
             return "N/A"
-        return f"{'+' if v >= 0 else ''}{v:.2f}"
+        return f"{'+' if v >= 0 else ''}{v * scale:.2f}{suffix}"
 
     def safe_val(val, fmt):
         return fmt.format(val) if isinstance(val, (int, float)) else "N/A"
@@ -341,13 +342,13 @@ def assemble_deep_report(payload, qualitative_context, llm_sections):
         "",
         "━━ 本周指标变化 ━━",
         f"{'指标':<10} {'当前值':>8} {'周变化':>10}",
-        f"{'10Y美债':<10} {s.get('yield_10y', 0):.2f}%  {fmt_week_delta('yield_10y')}bp",
-        f"{'2Y美债':<10} {s.get('yield_2y', 0):.2f}%  {fmt_week_delta('yield_2y')}bp",
-        f"{'2-10利差':<10} {(payload['curve'].get('spread_2_10') or 0)*100:.0f}bp  {fmt_week_delta('spread_2_10')}bp",
-        f"{'DTWEXBGS':<10} {s.get('dxy', 0):.1f}  {fmt_week_delta('dxy')}",
-        f"{'WTI':<10} ${s.get('wti', 0):.1f}  {fmt_week_delta('wti')}",
-        f"{'黄金':<10} ${s.get('gold', 0):.0f}  {fmt_week_delta('gold')}",
-        f"{'VIX':<10} {s.get('vix', 0):.1f}  {fmt_week_delta('vix')}",
+        f"{'10Y美债':<10} {s.get('yield_10y', 0):.2f}%  {fmt_week_delta('yield_10y', scale=100, suffix='bp')}",
+        f"{'2Y美债':<10} {s.get('yield_2y', 0):.2f}%  {fmt_week_delta('yield_2y', scale=100, suffix='bp')}",
+        f"{'2-10利差':<10} {(payload['curve'].get('spread_2_10') or 0)*100:.0f}bp  {fmt_week_delta('spread_2_10', scale=100, suffix='bp')}",
+        f"{'DTWEXBGS':<10} {s.get('dxy', 0):.1f}  {fmt_week_delta('dxy', suffix='点')}",
+        f"{'WTI':<10} ${s.get('wti', 0):.1f}  {fmt_week_delta('wti', suffix='美元')}",
+        f"{'黄金':<10} ${s.get('gold', 0):.0f}  {fmt_week_delta('gold', suffix='美元')}",
+        f"{'VIX':<10} {s.get('vix', 0):.1f}  {fmt_week_delta('vix', suffix='点')}",
         "",
         "━━ 信号评分 ━━",
         f"{SCORE_EMOJI.get(sig['fed_score'],'⚪')} 联储  "
@@ -414,11 +415,11 @@ def build_report_html(payload, message):
     s = payload["snapshot"]
     weekly = payload.get("weekly_change", {})
 
-    def fmt_delta(key):
+    def fmt_delta(key, scale=1.0, suffix=""):
         v = weekly.get(f"{key}_7d_delta", 0)
         if v is None:
             return "N/A"
-        return f"{'+' if v >= 0 else ''}{v:.2f}"
+        return f"{'+' if v >= 0 else ''}{v * scale:.2f}{suffix}"
 
     # 解析 message 中的各节内容
     import re
@@ -454,16 +455,16 @@ def build_report_html(payload, message):
 
     # 指标表格
     indicators = [
-        ("10Y美债", f"{s.get('yield_10y', 0):.2f}%", fmt_delta("yield_10y")),
-        ("2Y美债", f"{s.get('yield_2y', 0):.2f}%", fmt_delta("yield_2y")),
-        ("2-10利差", f"{(payload['curve'].get('spread_2_10') or 0)*100:.0f}bp", fmt_delta("spread_2_10")),
-        ("DTWEXBGS", f"{s.get('dxy', 0):.1f}", fmt_delta("dxy")),
-        ("WTI", f"${s.get('wti', 0):.1f}", fmt_delta("wti")),
-        ("黄金", f"${s.get('gold', 0):.0f}", fmt_delta("gold")),
-        ("VIX", f"{s.get('vix', 0):.1f}", fmt_delta("vix")),
+        ("10Y美债", f"{s.get('yield_10y', 0):.2f}%", fmt_delta("yield_10y", scale=100, suffix="bp")),
+        ("2Y美债", f"{s.get('yield_2y', 0):.2f}%", fmt_delta("yield_2y", scale=100, suffix="bp")),
+        ("2-10利差", f"{(payload['curve'].get('spread_2_10') or 0)*100:.0f}bp", fmt_delta("spread_2_10", scale=100, suffix="bp")),
+        ("DTWEXBGS", f"{s.get('dxy', 0):.1f}", fmt_delta("dxy", suffix="点")),
+        ("WTI", f"${s.get('wti', 0):.1f}", fmt_delta("wti", suffix="美元")),
+        ("黄金", f"${s.get('gold', 0):.0f}", fmt_delta("gold", suffix="美元")),
+        ("VIX", f"{s.get('vix', 0):.1f}", fmt_delta("vix", suffix="点")),
     ]
     rows_html = "".join(
-        f'<tr><td class="ind-name">{name}</td><td class="ind-val">{val}</td><td class="ind-delta">{delta}bp</td></tr>'
+        f'<tr><td class="ind-name">{name}</td><td class="ind-val">{val}</td><td class="ind-delta">{delta}</td></tr>'
         for name, val, delta in indicators
     )
 
