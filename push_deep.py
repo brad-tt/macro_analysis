@@ -251,11 +251,36 @@ def check_hallucinated_numbers(sections, payload):
     payload_numbers = extract_all_numbers_from_payload(payload)
     hallucinated = []
     for section_text in sections.values():
-        numbers = re.findall(r"-?\d+\.?\d*", section_text)
+        cleaned_text = sanitize_numeric_labels(section_text)
+        numbers = re.findall(r"-?\d+\.?\d*", cleaned_text)
         for n in numbers:
             if not approximately_exists(float(n), payload_numbers):
                 hallucinated.append(n)
     return hallucinated
+
+
+def sanitize_numeric_labels(text):
+    """移除宏观金融里常见的术语数字，避免把行业标签误判成幻觉。"""
+    patterns = [
+        r"\b10Y\b",
+        r"\b2Y\b",
+        r"\b3M\b",
+        r"10年期",
+        r"2年期",
+        r"3个月",
+        r"2-10(?:利差|spread)?",
+        r"S&P\s*500",
+        r"标普\s*500",
+        r"标普500",
+        r"纳斯达克\s*100",
+        r"纳斯达克100",
+        r"NASDAQ\s*100",
+        r"Nasdaq\s*100",
+    ]
+    cleaned = text
+    for pattern in patterns:
+        cleaned = re.sub(pattern, "TERM", cleaned, flags=re.IGNORECASE)
+    return cleaned
 
 
 def extract_all_numbers_from_payload(payload):
