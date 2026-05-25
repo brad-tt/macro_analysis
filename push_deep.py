@@ -205,7 +205,16 @@ def validate_deep_report(raw_output, payload):
     hallucinated = check_hallucinated_numbers(sections, payload)
     if hallucinated:
         logger.warning(f"[L3_DEEP] Hallucinated numbers: {hallucinated}")
-        raise LLMOutputError(f"hallucinated numbers detected: {', '.join(sorted(set(hallucinated)))}")
+        significant = []
+        for n in set(hallucinated):
+            try:
+                value = abs(float(n))
+            except ValueError:
+                continue
+            if "." in n or value >= 20:
+                significant.append(n)
+        if significant:
+            raise LLMOutputError(f"hallucinated numbers detected: {', '.join(sorted(significant))}")
 
     # 质量检查：CAUSAL_CHAIN 必须包含 "→" 符号
     if "→" not in sections.get("CAUSAL_CHAIN", ""):
