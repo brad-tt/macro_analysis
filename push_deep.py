@@ -27,7 +27,8 @@ SYSTEM_PROMPT_DEEP = """你是一位专注于全球宏观经济与美股资产�
   * 利差：直接写"2.86%"，不要写"286bp"、"约3%"或"不到3"
 - 禁止在内容中提及任何历史年份（如2008、1970、2020、2024等）
 - 禁止用历史事件做比较时带出具体数字年份
-- 每节最多引用3个数字，超出部分用文字描述替代
+- 除了直接复述【核心数据】里的原始数字，正文五节尽量不要出现任何阿拉伯数字、年份、bp、美元符号或百分号
+- 如必须引用数字，每节最多 1 个，且必须与【核心数据】原文完全一致
 - 不确定时宁可不写数字，也不要写近似值
 
 输出格式要求（严格按以下标签结构输出，每个标签单独成行）：
@@ -153,7 +154,7 @@ def generate_deep_report(payload, qualitative_context, prev_signal=None):
     response = client.messages.create(
         model=LLM_MODEL,
         max_tokens=4000,
-        temperature=0.3,
+        temperature=0.2,
         system=SYSTEM_PROMPT_DEEP,
         messages=[{"role": "user", "content": user_prompt}]
     )
