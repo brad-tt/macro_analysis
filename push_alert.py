@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 
 from anthropic import Anthropic
-from config.settings import ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from config.settings import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 import db
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,10 @@ def check_alert_conditions(curr_signal, prev_signal):
 
 def generate_alert(triggered_conditions, payload, qualitative_context):
     """调用LLM生成预警内容"""
-    client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    client_kwargs = {"api_key": LLM_API_KEY}
+    if LLM_BASE_URL:
+        client_kwargs["base_url"] = LLM_BASE_URL
+    client = Anthropic(**client_kwargs)
 
     snapshot = payload.get("snapshot", {})
     prev_payload = {}
@@ -75,7 +78,7 @@ def generate_alert(triggered_conditions, payload, qualitative_context):
     )
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=LLM_MODEL,
         max_tokens=600,
         temperature=0.2,
         system=SYSTEM_PROMPT_ALERT,

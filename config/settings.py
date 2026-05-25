@@ -5,6 +5,12 @@ load_dotenv()
 
 FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "").strip()
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+LLM_API_KEY = os.environ.get("LLM_API_KEY") or DEEPSEEK_API_KEY or ANTHROPIC_API_KEY
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL") or ANTHROPIC_BASE_URL
+LLM_MODEL = os.environ.get("LLM_MODEL") or ANTHROPIC_MODEL
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 

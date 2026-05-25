@@ -80,7 +80,9 @@ pip install -r requirements.txt
 cp .env.example .env
 # 填入以下值：
 # FRED_API_KEY       → https://fred.stlouisfed.org/docs/api/api_key.html
-# ANTHROPIC_API_KEY  → MiniMax API Key（支持 Anthropic 兼容端点）
+# DEEPSEEK_API_KEY   → DeepSeek API Key
+# LLM_BASE_URL       → https://api.deepseek.com/anthropic
+# LLM_MODEL          → deepseek-v4-pro
 # TELEGRAM_BOT_TOKEN → Telegram Bot Token（@BotFather 获取）
 # TELEGRAM_CHAT_ID   → 你的 Telegram Chat ID
 ```

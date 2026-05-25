@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, date, timedelta
 
 from anthropic import Anthropic
-from config.settings import ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+from config.settings import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 import db
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,10 @@ USER_PROMPT_TEMPLATE_DEEP = """报告日期：{date}
 
 def generate_deep_report(payload, qualitative_context, prev_signal=None):
     """调用LLM生成深度周报"""
-    client = Anthropic(api_key=ANTHROPIC_API_KEY)
+    client_kwargs = {"api_key": LLM_API_KEY}
+    if LLM_BASE_URL:
+        client_kwargs["base_url"] = LLM_BASE_URL
+    client = Anthropic(**client_kwargs)
 
     week_start = (date.fromisoformat(payload["date"]) - timedelta(days=7)).isoformat()
     current_total_score = payload["signals"]["total_score"]
@@ -148,7 +151,7 @@ def generate_deep_report(payload, qualitative_context, prev_signal=None):
     )
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=LLM_MODEL,
         max_tokens=4000,
         temperature=0.3,
         system=SYSTEM_PROMPT_DEEP,
