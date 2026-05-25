@@ -17,5 +17,6 @@ anthropic
 python-dotenv
 APScheduler
 python-telegram-bot
+playwright
 sqlalchemy
 python-dateutil

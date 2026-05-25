@@ -59,7 +59,9 @@ jobs:
             macro-db-
 
       - name: Install dependencies
-        run: pip install -r requirements.txt --quiet
+        run: |
+          pip install -r requirements.txt --quiet
+          python -m playwright install --with-deps chromium
 
       - name: Determine pipeline mode
         id: mode
